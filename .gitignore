@@ -1,0 +1,47 @@
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Aa]rm/
+[Aa]rm64/
+bld/
+[Bb]in/
+[Oo]bj/
+
+# Visual Studio Code
+.vscode/
+
+# JetBrains IDEs
+.idea/
+
+# macOS
+.DS_Store
+
+# Secrets and credentials
+appsettings.Development.json
+*.json
+!package.json
+!tsconfig.json
+!components.json
+!.hintrc
+
+# Environment files
+.env
+.env.local
+
+# Node modules
+node_modules/
+dist/
+
+# Temporary files
+*.tmp
+*.temp
+*.log
