@@ -11,8 +11,11 @@ import sportsImage from "@assets/generated_images/sports_anime_poster.png";
 import romanceImage from "@assets/generated_images/romance_anime_poster.png";
 import adventureImage from "@assets/generated_images/adventure_anime_poster.png";
 import cyberpunkImage from "@assets/generated_images/cyberpunk_anime_poster.png";
+import { useTokenFromUrl } from "@/hooks/useTokenUrl";
+import { useEffect } from "react";
 
 export default function Dashboard() {
+  useTokenFromUrl();
   const heroAnimes = [
     {
       id: 1,
@@ -68,3 +71,7 @@ export default function Dashboard() {
     </div>
   );
 }
+function login(token: string) {
+  throw new Error("Function not implemented.");
+}
+

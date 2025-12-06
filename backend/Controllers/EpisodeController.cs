@@ -1,6 +1,7 @@
 ﻿using AutoMapper;
 using backend.DTOs;
 using backend.Interface;
+using backend.Models;
 using Microsoft.AspNetCore.Mvc;
 using System.Collections.Immutable;
 
@@ -20,7 +21,7 @@ namespace backend.Controllers
         }
 
         [HttpGet("get-animeepisodes")]
-        public async Task<ActionResult<ICollection<EpisodeDTO>>> GetEpisodeInAnimes([FromQuery] string animeId)
+        public async Task<ActionResult<ICollection<EpisodeGetDTO>>> GetEpisodeInAnimes([FromQuery] string animeId)
         {
             Guid animeGuid = Guid.Parse(animeId);
             var animeEpisodes = await _uow.Episodes.GetAnimeEpisodesAsync(animeGuid);
@@ -28,7 +29,7 @@ namespace backend.Controllers
             {
                 return NotFound("Episodes not found");
             }
-            var episodeDTOs = animeEpisodes.Select(episode => new EpisodeDTO
+            var episodeDTOs = animeEpisodes.Select(episode => new EpisodeGetDTO
             {
                 EpisodeName = episode.EpisodeName,
                 EpisodeNumber = episode.EpisodeNumber,
@@ -43,6 +44,30 @@ namespace backend.Controllers
         {
             var episodes = await _ggDrive.GetEpisodesFromDrive();
             return Ok(episodes);
+        }
+
+        [HttpPost("upload-episode")]
+        public async Task<ActionResult> UploadEpisode([FromForm] EpisodeUploadDTO episodeUploadDTO)
+        {
+            var listOfEpisodes = await _uow.Episodes.GetAnimeEpisodesAsync(Guid.Parse(episodeUploadDTO.AnimeId));
+
+            if (listOfEpisodes.Any(e => e.EpisodeNumber == episodeUploadDTO.EpisodeNumber))
+            {
+                return BadRequest("Episode number already exists for this anime.");
+            }
+
+            var episode = _mapper.Map<Episode>(episodeUploadDTO);
+
+            var videoUrl = await _ggDrive.UploadFileAsync(episodeUploadDTO.File);
+
+            episode.VideoUrl = videoUrl;
+
+            _uow.Episodes.Add(episode);
+            if (await _uow.Complete())
+            {
+                return Ok("Episode uploaded successfully.");
+            }
+            return BadRequest("Failed to upload episode.");
         }
     }
 }

@@ -10,13 +10,17 @@ namespace backend.Helpers
     {
         public AutoMapperProfiles()
         {
-            CreateMap<UserAuthRegisterDTO, User>()
-                .BeforeMap<ValidateBeforeMapAction<UserAuthRegisterDTO, User>>(); 
             //Sử dụng để validation properties của DTO dựa trên Model trước khi Mapping
+            CreateMap<UserAuthRegisterDTO, User>()
+                .BeforeMap<ValidateBeforeMapAction<UserAuthRegisterDTO, User>>();
+            CreateMap<AnimeCreateDTO, Anime>()
+                .BeforeMap<ValidateBeforeMapAction<AnimeCreateDTO, Anime>>();
+            CreateMap<EpisodeUploadDTO, Episode>()
+                .BeforeMap<ValidateBeforeMapAction<EpisodeUploadDTO, Episode>>();
         }
     }
 
-    //Hàm sử dụng để validate DTO trước khi mapping sang Model
+    //Hàm sử dụng để validate DTO dựa trên Model trước khi mapping sang Model
     public class ValidateBeforeMapAction<TSource, TDestination> : IMappingAction<TSource, TDestination>
     {
         public void Process(TSource source, TDestination destination, ResolutionContext context)

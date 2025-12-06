@@ -17,10 +17,18 @@ namespace backend.Extensions
                 options.UseNpgsql(config.GetConnectionString("DefaultConnection")));
 
             services.Configure<GoogleDriveConfig>(config.GetSection("GoogleDrive"));
+            services.Configure<CookiePolicyOptions>(options =>
+            {
+                options.MinimumSameSitePolicy = SameSiteMode.Lax;
+                options.Secure = CookieSecurePolicy.Always;
+            });
+
             services.AddScoped<IGoogleDriveService, GoogleDriveService>();
             services.AddScoped<ITokenService, TokenService>();
             services.AddScoped<IPasswordHasherService, PasswordHasherService>();
             services.AddScoped<IGoogleDriveService, GoogleDriveService>();
+            services.AddScoped<IAuthService, AuthService>();
+            
             services.AddScoped<IUnitOfWork, UnitOfWork>();
             services.AddAutoMapper(cfg => { }, AppDomain.CurrentDomain.GetAssemblies());
 

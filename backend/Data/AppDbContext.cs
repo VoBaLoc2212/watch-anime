@@ -17,7 +17,12 @@ namespace backend.Data
             base.OnModelCreating(builder);
 
 
-            
+            builder.Entity<Anime>()
+                .HasMany(a => a.Episodes)
+                .WithOne(e => e.Anime)
+                .HasForeignKey(e => e.AnimeId)
+                .OnDelete(DeleteBehavior.Restrict);
+
 
 
         }

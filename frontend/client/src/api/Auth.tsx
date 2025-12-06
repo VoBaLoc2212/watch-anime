@@ -30,6 +30,9 @@ export async function RegisterApi(payload: Register) {
     const data = await response.json() as { token?: string; [key: string]: any };
     if (data && data.token) {
         localStorage.setItem('token', data.token);
+        localStorage.setItem('fullName', `${payload.firstName} ${payload.lastName}`);
+        localStorage.setItem('email', payload.email);
+        localStorage.setItem('photoUrl', data.photoUrl || '');
     }
 
     return data;
@@ -50,5 +53,16 @@ export async function LoginApi(payload: Login) {
     const data = await response.json() as { token?: string; [key: string]: any };
     if (data && data.token) {
         localStorage.setItem('token', data.token);
+        localStorage.setItem('fullName', data.fullName || '');
+        localStorage.setItem('email', payload.email);
+        localStorage.setItem('photoUrl', data.photoUrl || '');
     }
+}
+
+export async function LogoutApi() {
+    localStorage.removeItem('token');
+}
+
+export function LoginWithGoogle() {
+    window.location.href = `${API_URL}/api/account/login-google`;
 }
