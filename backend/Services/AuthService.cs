@@ -28,7 +28,7 @@ public class AuthService : IAuthService
         _tokenService = tokenService;
     }
 
-    public async Task<string> HandleGoogleLoginAsync(string email, string name, string googleId)
+    public async Task<string> HandleGoogleLoginAsync(string email, string name, string googleId, string photoUrl)
     {
         // 1. Kiểm tra User đã tồn tại trong DB chưa
         var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
@@ -46,6 +46,8 @@ public class AuthService : IAuthService
                 LastName = lastName,
                 GoogleId = googleId, // Lưu GoogleId để sau này đối chiếu
                 CreatedAt = DateTime.UtcNow,
+                PhoneNumber = "",
+                PhotoUrl = photoUrl
                 // Password = ... // Với user Google, có thể để password null hoặc random string
             };
 

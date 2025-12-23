@@ -1,0 +1,263 @@
+import { useState, useEffect } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Search, Filter, Plus, Edit, Trash2, Eye } from "lucide-react";
+import { Link } from "wouter";
+import { availableGenres } from "@/constants/animeConstants";
+import magicalGirlImage from "@assets/generated_images/magical_girl_anime_poster.png";
+import darkFantasyImage from "@assets/generated_images/dark_fantasy_anime_poster.png";
+import schoolAnimeImage from "@assets/generated_images/school_anime_poster.png";
+import mechaImage from "@assets/generated_images/mecha_robot_anime_poster.png";
+import sportsImage from "@assets/generated_images/sports_anime_poster.png";
+import romanceImage from "@assets/generated_images/romance_anime_poster.png";
+import adventureImage from "@assets/generated_images/adventure_anime_poster.png";
+import cyberpunkImage from "@assets/generated_images/cyberpunk_anime_poster.png";
+import heroImage1 from "@assets/generated_images/hero_banner_anime_warrior.png";
+import heroImage2 from "@assets/generated_images/fantasy_battle_hero_banner.png";
+import { GetAnimeListApi } from "@/api/Anime";
+import { Anime } from "@/models/AnimeModel";
+
+
+
+export default function ManageAnime() {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedGenre, setSelectedGenre] = useState<string>("all");
+  const [selectedStatus, setSelectedStatus] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<string>("title");
+  const [filteredAnimes, setFilteredAnimes] = useState<Anime[]>([]);
+
+
+  useEffect(() => {
+    const fetchAndFilterAnimes = async () => {
+      let result = await GetAnimeListApi();
+
+      // Filter by search query
+      if (searchQuery) {
+        result = result.filter(
+        (anime: Anime) =>
+          anime.animeName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          anime.description.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+
+    // Filter by genre
+    if (selectedGenre !== "all") {
+      result = result.filter((anime: Anime) =>
+        anime.genres.includes(selectedGenre)
+      );
+    }
+
+    // Filter by status
+    if (selectedStatus !== "all") {
+      result = result.filter((anime: Anime) => anime.status === selectedStatus);
+    }
+
+    // Sort
+    switch (sortBy) {
+      case "animeName":
+        result.sort((a: Anime, b: Anime) => a.animeName.localeCompare(b.animeName));
+        break;
+      case "releaseYear":
+        result.sort((a: Anime, b: Anime) => b.releaseYear - a.releaseYear);
+        break;
+      case "totalEpisodes":
+        result.sort((a: Anime, b: Anime) => b.totalEpisodes - a.totalEpisodes);
+        break;
+    }
+
+      setFilteredAnimes(result);
+    };
+
+    fetchAndFilterAnimes();
+  }, [searchQuery, selectedGenre, selectedStatus, sortBy]);
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "Ongoing":
+        return "bg-green-500/10 text-green-500";
+      case "Completed":
+        return "bg-blue-500/10 text-blue-500";
+      case "Upcoming":
+        return "bg-orange-500/10 text-orange-500";
+      default:
+        return "";
+    }
+  };
+
+  return (
+    <div className="container mx-auto px-4 py-8">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+        <div>
+          <h1 className="text-3xl font-bold">Manage Anime</h1>
+          <p className="text-muted-foreground mt-2">
+            Manage and organize your anime collection
+          </p>
+        </div>
+        <Link href="/upload-anime">
+          <Button className="gap-2">
+            <Plus className="h-4 w-4" />
+            Add New Anime
+          </Button>
+        </Link>
+      </div>
+
+      {/* Search and Filters */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Filter className="h-5 w-5" />
+            Search & Filters
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Search */}
+            <div className="lg:col-span-2">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search anime by title or description..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+
+            {/* Genre Filter */}
+            <Select value={selectedGenre} onValueChange={setSelectedGenre}>
+              <SelectTrigger>
+                <SelectValue placeholder="All Genres" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Genres</SelectItem>
+                {availableGenres.map((genre) => (
+                  <SelectItem key={genre} value={genre}>
+                    {genre}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* Status Filter */}
+            <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+              <SelectTrigger>
+                <SelectValue placeholder="All Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="Ongoing">Ongoing</SelectItem>
+                <SelectItem value="Completed">Completed</SelectItem>
+                <SelectItem value="Upcoming">Upcoming</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center gap-4 mt-4">
+            <span className="text-sm text-muted-foreground">Sort by:</span>
+            <Select value={sortBy} onValueChange={setSortBy}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="animeName">Anime Name (A-Z)</SelectItem>
+                <SelectItem value="releaseYear">Year (Newest)</SelectItem>
+                <SelectItem value="totalEpisodes">Episodes (Most)</SelectItem>
+              </SelectContent>
+            </Select>
+            <span className="text-sm text-muted-foreground ml-auto">
+              {filteredAnimes.length} anime{filteredAnimes.length !== 1 ? "s" : ""} found
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Anime Grid */}
+      {filteredAnimes.length === 0 ? (
+        <Card className="p-12 text-center">
+          <div className="text-muted-foreground">
+            <Search className="h-12 w-12 mx-auto mb-4 opacity-50" />
+            <p className="text-lg font-medium">No anime found</p>
+            <p className="text-sm mt-2">Try adjusting your search or filters</p>
+          </div>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {filteredAnimes.map((anime) => (
+            <Card key={anime.id} className="overflow-hidden group hover:shadow-lg transition-shadow">
+              {/* Thumbnail */}
+              <div className="relative aspect-[2/3] overflow-hidden">
+                <img
+                  src={anime.thumbnailUrl}
+                  alt={anime.animeName}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  referrerPolicy="no-referrer"
+                />
+                <div className="absolute top-2 right-2">
+                  <Badge className={getStatusColor(anime.status)}>
+                    {anime.status}
+                  </Badge>
+                </div>
+              </div>
+
+              {/* Content */}
+              <CardContent className="p-4">
+                <h3 className="font-semibold text-lg mb-2 line-clamp-1">
+                  {anime.animeName}
+                </h3>
+                <p className="text-sm text-muted-foreground line-clamp-2 mb-3">
+                  {anime.description}
+                </p>
+
+                {/* Genres */}
+                <div className="flex flex-wrap gap-1 mb-3">
+                  {anime.genres.slice(0, 3).map((genre: string) => (
+                    <Badge key={genre} variant="secondary" className="text-xs">
+                      {genre}
+                    </Badge>
+                  ))}
+                </div>
+
+                {/* Info */}
+                <div className="flex items-center justify-between text-xs text-muted-foreground mb-4">
+                  <span>{anime.totalEpisodes} episodes</span>
+                  <span>{anime.releaseYear}</span>
+                  {/* <Badge variant="outline" className="text-xs">
+                    {anime.rating}
+                  </Badge> */}
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-2">
+                  <Link href={`/watch/${anime.id}`} className="flex-1">
+                    <Button variant="default" size="sm" className="w-full gap-1">
+                      <Eye className="h-3 w-3" />
+                      View
+                    </Button>
+                  </Link>
+                  <Button variant="outline" size="sm" className="gap-1">
+                    <Edit className="h-3 w-3" />
+                    Edit
+                  </Button>
+                  <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive">
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

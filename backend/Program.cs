@@ -1,4 +1,4 @@
-using API.Middlewares;
+﻿using API.Middlewares;
 using backend.Data;
 using backend.Extensions;
 using Microsoft.EntityFrameworkCore;
@@ -9,7 +9,10 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddApplicationService(builder.Configuration);
 builder.Services.IdentityServiceExtensions(builder.Configuration);
-
+builder.WebHost.ConfigureKestrel(serverOptions =>
+{
+    serverOptions.Limits.MaxRequestBodySize = null;
+});
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 

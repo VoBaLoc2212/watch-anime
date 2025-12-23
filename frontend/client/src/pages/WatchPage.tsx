@@ -1,4 +1,3 @@
-import { Navbar } from "@/components/Navbar";
 import { VideoPlayer } from "@/components/VideoPlayer";
 import { EpisodeGrid } from "@/components/EpisodeGrid";
 import { AnimeRow } from "@/components/AnimeRow";
@@ -40,8 +39,6 @@ export default function WatchPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-background">
-      <Navbar />
       <main className="px-8 py-6 max-w-7xl mx-auto space-y-8">
         <VideoPlayer title={animeDetails.title} episode={currentEpisode} />
 
@@ -111,6 +108,5 @@ export default function WatchPage() {
 
         <AnimeRow title="You Might Also Like" animes={relatedAnime} />
       </main>
-    </div>
   );
 }

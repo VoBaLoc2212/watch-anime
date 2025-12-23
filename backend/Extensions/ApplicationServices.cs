@@ -4,6 +4,7 @@ using backend.Interface;
 using backend.Repository.UnitOfWork;
 using backend.Services;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 namespace backend.Extensions
 {
     public static class ApplicationServices
@@ -13,8 +14,13 @@ namespace backend.Extensions
             // Add services to the container.
             services.AddCors();
 
+
+            var connectionString = config.GetConnectionString("DefaultConnection");
+            var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
+            dataSourceBuilder.EnableDynamicJson();
+            var dataSource = dataSourceBuilder.Build();
             services.AddDbContext<AppDbContext>(options =>
-                options.UseNpgsql(config.GetConnectionString("DefaultConnection")));
+                options.UseNpgsql(dataSource));
 
             services.Configure<GoogleDriveConfig>(config.GetSection("GoogleDrive"));
             services.Configure<CookiePolicyOptions>(options =>

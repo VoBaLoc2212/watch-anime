@@ -1,6 +1,5 @@
 import { HeroCarousel } from "@/components/HeroCarousel";
 import { AnimeRow } from "@/components/AnimeRow";
-import { Navbar } from "@/components/Navbar";
 import heroImage1 from "@assets/generated_images/hero_banner_anime_warrior.png";
 import heroImage2 from "@assets/generated_images/fantasy_battle_hero_banner.png";
 import magicalGirlImage from "@assets/generated_images/magical_girl_anime_poster.png";
@@ -11,11 +10,8 @@ import sportsImage from "@assets/generated_images/sports_anime_poster.png";
 import romanceImage from "@assets/generated_images/romance_anime_poster.png";
 import adventureImage from "@assets/generated_images/adventure_anime_poster.png";
 import cyberpunkImage from "@assets/generated_images/cyberpunk_anime_poster.png";
-import { useTokenFromUrl } from "@/hooks/useTokenUrl";
-import { useEffect } from "react";
 
 export default function Dashboard() {
-  useTokenFromUrl();
   const heroAnimes = [
     {
       id: 1,
@@ -58,20 +54,14 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="min-h-screen bg-background">
-      <Navbar />
-      <main>
-        <HeroCarousel animes={heroAnimes} />
-        <div className="py-8 space-y-12">
-          <AnimeRow title="Continue Watching" animes={continueWatching} />
-          <AnimeRow title="Trending Now" animes={trending} />
-          <AnimeRow title="New Releases" animes={newReleases} />
-        </div>
-      </main>
-    </div>
+    <>
+      <HeroCarousel animes={heroAnimes} />
+      <div className="py-8 space-y-12">
+        <AnimeRow title="Continue Watching" animes={continueWatching} />
+        <AnimeRow title="Trending Now" animes={trending} />
+        <AnimeRow title="New Releases" animes={newReleases} />
+      </div>
+    </>
   );
-}
-function login(token: string) {
-  throw new Error("Function not implemented.");
 }
 

@@ -1,5 +1,7 @@
 ﻿using backend.Models;
 using Microsoft.EntityFrameworkCore;
+using System.Reflection.Emit;
+using System.Text.Json;
 
 namespace backend.Data
 {
@@ -18,13 +20,24 @@ namespace backend.Data
 
 
             builder.Entity<Anime>()
+                .Property(a => a.Genres)
+                .HasConversion(
+                    v => JsonSerializer.Serialize(v, (JsonSerializerOptions)null),
+                    v => JsonSerializer.Deserialize<List<string>>(v, (JsonSerializerOptions)null) ?? new List<string>()
+                );
+
+
+            builder.Entity<Anime>()
                 .HasMany(a => a.Episodes)
                 .WithOne(e => e.Anime)
                 .HasForeignKey(e => e.AnimeId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-
-
+            builder.Entity<Anime>()
+                .HasOne(a => a.CreatedBy)
+                .WithMany(u => u.CreatedAnimes)
+                .HasForeignKey(a => a.CreatedById)
+                .OnDelete(DeleteBehavior.Restrict);
         }
     }
 }

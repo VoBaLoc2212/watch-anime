@@ -2,9 +2,12 @@
 using backend.DTOs;
 using backend.Interface;
 using backend.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Collections.Immutable;
+using System.Security.Claims;
+using static System.Net.WebRequestMethods;
 
 namespace backend.Controllers
 {
@@ -31,12 +34,16 @@ namespace backend.Controllers
                 return NotFound("Anime video not found");
             }
 
-            var animeDTOs = Animes.Select(anime => new AnimeGetDTO
+            var animeDTOs = Animes.Select((anime) => new AnimeGetDTO
             {
-                Id = anime.Id.ToString(),
                 AnimeName = anime.AnimeName,
                 Description = anime.Description,
-                ThumbnailUrl = anime.ThumbnailUrl
+                ThumbnailUrl = anime.ThumbnailUrl,
+                ReleaseYear = anime.ReleaseYear,
+                Studio = anime.Studio,
+                Status = anime.Status,
+                TotalEpisodes = anime.TotalEpisodes,
+                Genres = anime.Genres
             }).ToImmutableList();
 
             return Ok(animeDTOs);
@@ -52,7 +59,6 @@ namespace backend.Controllers
             }
             var animeDTO = new AnimeGetDTO
             {
-                Id = anime.Id.ToString(),
                 AnimeName = anime.AnimeName,
                 Description = anime.Description,
                 ThumbnailUrl = anime.ThumbnailUrl
@@ -60,28 +66,36 @@ namespace backend.Controllers
             return Ok(animeDTO);
         }
 
+        [Authorize]
         [HttpPost("add-anime")]
         public async Task<ActionResult> AddAnime([FromForm] AnimeCreateDTO animeDTO)
         {
+            var emailUser = User.FindFirst(ClaimTypes.Name)?.Value;
+
+            var user = await _uow.Accounts.GetUserByEmail(emailUser);
+
+            if (user == null) return Unauthorized();
+
             var existingAnime = await _uow.Animes.GetAll()
                 .FirstOrDefaultAsync(a => a.AnimeName == animeDTO.AnimeName);
             if (existingAnime != null)
             {
                 return BadRequest("Anime with the same name already exists");
             }
-
-            var thumbnailUrl = await _ggDrive.UploadFileAsync(animeDTO.Thumbnail);
-
             var anime = _mapper.Map<Anime>(animeDTO);
 
-            anime.ThumbnailUrl = thumbnailUrl;
+            anime.CreatedById = user.Id;
+
+            var thumbnailId = await _ggDrive.UploadImgAsync(animeDTO.Thumbnail, $"anime/{anime.AnimeName}/thumbnail", "thumbnail");
+
+            anime.ThumbnailUrl = $"https://drive.google.com/thumbnail?id={thumbnailId}&sz=w400";
             _uow.Animes.Add(anime);
 
             if (await _uow.Complete() == false)
             {
                 return BadRequest("Failed to add anime");
             }
-            return Ok("Anime added successfully");
+            return Ok(new { message = "Anime added successfully" });
         }
     }
 }

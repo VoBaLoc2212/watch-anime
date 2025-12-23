@@ -57,8 +57,9 @@ namespace backend.Controllers
             }
 
             var episode = _mapper.Map<Episode>(episodeUploadDTO);
+            var anime = await _uow.Animes.GetByIdAsync(Guid.Parse(episodeUploadDTO.AnimeId));
 
-            var videoUrl = await _ggDrive.UploadFileAsync(episodeUploadDTO.File);
+            var videoUrl = await _ggDrive.UploadImgAsync(episodeUploadDTO.File, $"anime/{anime.AnimeName}",episodeUploadDTO.EpisodeNumber.ToString());
 
             episode.VideoUrl = videoUrl;
 

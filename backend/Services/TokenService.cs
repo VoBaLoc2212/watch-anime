@@ -20,9 +20,8 @@ namespace backend.Services
         {
             var claims = new List<Claim>
             {
-                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-                new Claim(ClaimTypes.Name, user.Email),
-                new Claim(ClaimTypes.NameIdentifier, (user.FirstName + user.LastName))
+                new Claim(ClaimTypes.Name, user.Email)
+
             };
 
             var creds = new SigningCredentials(_key, SecurityAlgorithms.HmacSha512Signature);

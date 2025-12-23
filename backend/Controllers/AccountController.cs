@@ -1,7 +1,7 @@
 ﻿using AutoMapper;
 using backend.DTOs;
 using backend.Interface;
-using backend.Models;
+using Google.Apis.Drive.v3.Data;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
@@ -18,8 +18,9 @@ namespace backend.Controllers
         private readonly IPasswordHasherService _hasherPasswordService;
         private readonly IAuthService _authService;
         private readonly IConfiguration _configuration;
+        private readonly IGoogleDriveService _ggService;
 
-        public AccountController(IUnitOfWork unitOfWork, ITokenService tokenService, IMapper mapper, IPasswordHasherService hasherPasswordService, IAuthService authService, IConfiguration configuration)
+        public AccountController(IUnitOfWork unitOfWork, ITokenService tokenService, IMapper mapper, IPasswordHasherService hasherPasswordService, IAuthService authService, IConfiguration configuration, IGoogleDriveService ggService)
         {
             _unitOfWork = unitOfWork;
             _tokenService = tokenService;
@@ -27,14 +28,31 @@ namespace backend.Controllers
             _hasherPasswordService = hasherPasswordService;
             _authService = authService;
             _configuration = configuration;
+            _ggService = ggService;
+        }
+
+        [HttpGet("user")]
+        public async Task<ActionResult<UserAuthGetUserInformation>> GetUser([FromQuery] string email)
+        {
+            var existedUser = await _unitOfWork.Accounts.GetUserByEmail(email);
+            if (existedUser == null) return BadRequest("Email Not Found");
+
+            return Ok(new UserAuthGetUserInformation
+            {
+                Token = await _tokenService.CreateToken(existedUser),
+                Email = existedUser.Email,
+                FullName = $"{existedUser.FirstName} {existedUser.LastName}",
+                PhotoUrl = existedUser.PhotoUrl,
+                PhoneNumber = existedUser.PhoneNumber ?? string.Empty
+            });
         }
 
         [HttpPost("register")]
-        public async Task<ActionResult<UserAuthResponseDTO>> Register([FromBody] UserAuthRegisterDTO registerDto)
+        public async Task<ActionResult<UserAuthResponseDTO>> Register([FromBody] UserAuthDTO registerDto)
         {
             if (await _unitOfWork.Accounts.GetUserByEmail(registerDto.Email) != null)
                 return BadRequest("Email is already taken");
-            var user = _mapper.Map<User>(registerDto);
+            var user = _mapper.Map<Models.User>(registerDto);
             user.PasswordHash = await _hasherPasswordService.HashPassword(registerDto.Password);
             user.GoogleId = null;
 
@@ -99,14 +117,46 @@ namespace backend.Controllers
             var email = result.Principal.FindFirstValue(ClaimTypes.Email);
             var name = result.Principal.FindFirstValue(ClaimTypes.Name);
             var googleId = result.Principal.FindFirstValue(ClaimTypes.NameIdentifier);
-
+            var photoUrl = result.Principal.FindFirst("picture")?.Value;
             // 3. GỌI SERVICE (Dependency Injection hoạt động ở đây)
             // Controller không cần biết logic tạo user hay tạo token
-            var mySystemToken = await _authService.HandleGoogleLoginAsync(email, name, googleId);
+            var mySystemToken = await _authService.HandleGoogleLoginAsync(email, name, googleId, photoUrl);
 
             // 4. Redirect về Frontend kèm token
             var frontendUrl = _configuration.GetSection("CORS").Get<string[]>()?.FirstOrDefault();
             return Redirect($"{frontendUrl}/dashboard?token={mySystemToken}");
+        }
+
+        [HttpPut("update-user")]
+        public async Task<ActionResult<UserAuthGetUserInformation>> UpdateUser([FromForm] UserAuthUpdateDTO updateDto)
+        {
+            var user = await _unitOfWork.Accounts.GetUserByEmail(updateDto.Email);
+            if (user == null)
+                return BadRequest("User not found");
+            var userUpdated = _mapper.Map<UserAuthUpdateDTO, Models.User>(updateDto, user);
+
+            if (updateDto.Avatar != null)
+            {
+                // Handle file upload logic here
+                // For example, save the file and get the URL
+                var photoId = await _ggService.UploadImgAsync(updateDto.Avatar,$"user/{user.FirstName + " " + user.LastName}/avatar","avatar");
+                userUpdated.PhotoUrl = $"https://drive.google.com/thumbnail?id={photoId}&sz=w400";
+            }
+            _unitOfWork.Accounts.Update(user);
+
+            if(!(await _unitOfWork.Complete()))
+                return BadRequest("Update failed");
+
+            return Ok(new UserAuthGetUserInformation
+            {
+                Token = await _tokenService.CreateToken(userUpdated),
+                Email = userUpdated.Email,
+                FullName = $"{userUpdated.FirstName} {userUpdated.LastName}",
+                PhotoUrl = userUpdated.PhotoUrl,
+                PhoneNumber = userUpdated.PhoneNumber ?? string.Empty
+            });
+
+
         }
     }
 }

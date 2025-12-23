@@ -6,8 +6,10 @@ using Google.Apis.Auth.OAuth2.Flows;
 using Google.Apis.Auth.OAuth2.Responses;
 using Google.Apis.Drive.v3;
 using Google.Apis.Services;
+using Google.Apis.Upload;
 using Google.Apis.Util.Store;
 using Microsoft.Extensions.Options;
+using System.Security.AccessControl;
 
 namespace backend.Services
 {
@@ -56,30 +58,123 @@ namespace backend.Services
             });
         }
 
-        public async Task<string> UploadFileAsync(IFormFile file)
+        public async Task<string> GetOrCreateFolderAsync(string folderName, string parentId = null)
         {
             var service = GetDriveService();
 
+            var query = $"mimeType = 'application/vnd.google-apps.folder' and name = '{folderName}' and trashed = false";
+
+            if (!string.IsNullOrEmpty(parentId))
+            {
+                query += $" and '{parentId}' in parents";
+            }
+
+            var listRequest = service.Files.List();
+            listRequest.Q = query;
+            listRequest.Fields = "files(id, name)";
+            listRequest.PageSize = 1;
+
+            var listResponse = await listRequest.ExecuteAsync();
+            var existingFolder = listResponse.Files.FirstOrDefault();
+
+            if (existingFolder != null)
+            {
+                return existingFolder.Id;
+            }
+
+            var folderMetadata = new Google.Apis.Drive.v3.Data.File()
+            {
+                Name = folderName,
+                MimeType = "application/vnd.google-apps.folder" 
+            };
+
+            if (!string.IsNullOrEmpty(parentId))
+            {
+                folderMetadata.Parents = new List<string> { parentId };
+            }
+
+            var createRequest = service.Files.Create(folderMetadata);
+            createRequest.Fields = "id";
+
+            var folder = await createRequest.ExecuteAsync();
+            return folder.Id;
+        }
+
+        public async Task<string> CreateFolderStructureAsync(string path, string rootParentId = null)
+        {
+            var folderNames = path.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+
+            string currentParentId = rootParentId;
+
+            foreach (var folderName in folderNames)
+            {
+                currentParentId = await GetOrCreateFolderAsync(folderName, currentParentId);
+            }
+
+            return currentParentId;
+        }
+
+
+        public async Task<string> UploadImgAsync(IFormFile file, string folderPath, string customName)
+        {
+
+            string targetFolderId = await CreateFolderStructureAsync(folderPath, _config.FolderId);
+
+            var service = GetDriveService();
+
+            var listRequest = service.Files.List();
+            listRequest.Q = $"'{targetFolderId}' in parents and name contains '{customName}' and trashed = false";
+            listRequest.Fields = "files(id)";
+            var existingFiles = await listRequest.ExecuteAsync();
+
+            if (existingFiles.Files != null && existingFiles.Files.Count > 0)
+            {
+                foreach (var oldFile in existingFiles.Files)
+                {
+                    try
+                    {
+                        await service.Files.Delete(oldFile.Id).ExecuteAsync();
+                    }
+                    catch
+                    {
+                        // Có thể log lỗi xóa nhưng không nên chặn quy trình upload
+                    }
+                }
+            }
+
+            string fileExtension = Path.GetExtension(file.FileName);
+            string finalName = customName;
+
+            // Nếu tên mới chưa có đuôi, thì ghép đuôi của file gốc vào
+            if (!finalName.EndsWith(fileExtension, StringComparison.OrdinalIgnoreCase))
+            {
+                finalName += fileExtension;
+            }
+
             var driveFile = new Google.Apis.Drive.v3.Data.File()
             {
-                Name = file.FileName,
-
-                Parents = string.IsNullOrEmpty(_config.FolderId) ? null : new List<string> { _config.FolderId }
+                Name = finalName,
+                Parents = new List<string> { targetFolderId }
             };
 
             using var stream = file.OpenReadStream();
-
             var request = service.Files.Create(driveFile, stream, file.ContentType);
             request.Fields = "id";
 
             var response = await request.UploadAsync();
 
             if (response.Status != Google.Apis.Upload.UploadStatus.Completed)
-            {
-                throw new Exception($"Upload failed: {response.Exception?.Message}");
-            }
+                throw new Exception("Upload failed");
 
-            return request.ResponseBody?.Id!;
+            var permission = new Google.Apis.Drive.v3.Data.Permission()
+            {
+                Type = "anyone", // Hoặc "user" nếu muốn share cho email cụ thể
+                Role = "reader"  // Chỉ được xem
+            };
+            var permissionRequest = service.Permissions.Create(permission, request.ResponseBody.Id);
+            await permissionRequest.ExecuteAsync();
+
+            return request.ResponseBody.Id;
         }
 
         public async Task<Stream> GetFileStreamAsync(string fileId, string rangeHeader = null)
@@ -125,6 +220,133 @@ namespace backend.Services
             }).ToList();
 
             return episodes;
+        }
+
+        private async Task<string?> FindIdAsync(string name, string parentId, bool isFolder = false)
+        {
+            var service = GetDriveService();
+
+            // Tạo câu truy vấn
+            var query = $"name = '{name}' and trashed = false";
+
+            // Nếu có parentId, tìm trong folder đó. Nếu không, tìm trong Root hoặc folder config
+            if (!string.IsNullOrEmpty(parentId))
+            {
+                query += $" and '{parentId}' in parents";
+            }
+
+            if (isFolder)
+            {
+                query += " and mimeType = 'application/vnd.google-apps.folder'";
+            }
+
+            var request = service.Files.List();
+            request.Q = query;
+            request.Fields = "files(id)";
+            request.PageSize = 1; // Chỉ lấy 1 kết quả đầu tiên tìm thấy
+
+            var result = await request.ExecuteAsync();
+            return result.Files.FirstOrDefault()?.Id;
+        }
+
+        public async Task<bool> DeleteFileByPathAsync(string fullPath)
+        {
+            var service = GetDriveService();
+
+            // Ví dụ input: "user/avatar/EMP001/image.jpg"
+
+            // 1. Tách chuỗi
+            // folderNames = ["user", "avatar", "EMP001"]
+            // fileName = "image.jpg"
+            var parts = fullPath.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+
+            if (parts.Length == 0) return false;
+
+            string fileName = parts.Last();
+            var folderNames = parts.Take(parts.Length - 1);
+
+            // Bắt đầu từ Root folder (hoặc folder cấu hình của bạn)
+            string currentParentId = _config.FolderId;
+
+            // 2. Dò tìm folder cha cuối cùng
+            foreach (var folder in folderNames)
+            {
+                currentParentId = await FindIdAsync(folder, currentParentId, isFolder: true);
+
+                // Nếu đứt đoạn (không tìm thấy folder cha), tức là đường dẫn sai -> Dừng lại
+                if (currentParentId == null) return false;
+            }
+
+            // 3. Tìm ID của file trong folder cha cuối cùng
+            string fileId = await FindIdAsync(fileName, currentParentId, isFolder: false);
+
+            if (fileId == null)
+            {
+                // Không tìm thấy file
+                return false;
+            }
+
+            // 4. Thực hiện Xóa
+            try
+            {
+                // Lệnh này xóa vĩnh viễn (không vào thùng rác)
+                await service.Files.Delete(fileId).ExecuteAsync();
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        public async Task<string> UploadAnimeAsync(IFormFile file, string folderPath, string customName)
+        {
+            string targetFolderId = await CreateFolderStructureAsync(folderPath, _config.FolderId);
+            string fileExtension = Path.GetExtension(file.FileName);
+            string finalName = customName;
+
+            // Nếu tên mới chưa có đuôi, thì ghép đuôi của file gốc vào
+            if (!finalName.EndsWith(fileExtension, StringComparison.OrdinalIgnoreCase))
+            {
+                finalName += fileExtension;
+            }
+
+            var service = GetDriveService();
+            var driveFile = new Google.Apis.Drive.v3.Data.File()
+            {
+                Name = finalName,
+                Parents = new List<string> { targetFolderId }
+            };
+
+            using var stream = file.OpenReadStream();
+            var uploadRequest = service.Files.Create(driveFile, stream, file.ContentType);
+
+            uploadRequest.ChunkSize = FilesResource.CreateMediaUpload.MinimumChunkSize * 40; // ~10MB mỗi chunk
+
+            uploadRequest.ProgressChanged += (IUploadProgress progress) =>
+            {
+                switch (progress.Status)
+                {
+                    case UploadStatus.Uploading:
+                        Console.WriteLine($"Đang tải lên: {progress.BytesSent} bytes");
+                        break;
+                    case UploadStatus.Completed:
+                        Console.WriteLine("Hoàn tất!");
+                        break;
+                    case UploadStatus.Failed:
+                        Console.WriteLine("Lỗi: " + progress.Exception);
+                        break;
+                }
+            };
+
+            var uploadResult = await uploadRequest.UploadAsync();
+
+            if (uploadResult.Status != UploadStatus.Completed)
+            {
+                throw new Exception($"Upload failed: {uploadResult.Exception?.Message}");
+            }
+
+            return uploadRequest.ResponseBody.Id;
         }
     }
 }

@@ -2,6 +2,6 @@
 {
     public interface IAuthService
     {
-        Task<string> HandleGoogleLoginAsync(string email, string name, string googleId);
+        Task<string> HandleGoogleLoginAsync(string email, string name, string googleId, string photoUrl);
     }
 }

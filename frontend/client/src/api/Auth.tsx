@@ -11,7 +11,27 @@ interface Register extends Login {
     lastName: string;
 }
 
+interface UserInfo {
+    token: string;
+    email: string;
+    fullName: string;
+    photoUrl: string;
+    phoneNumber: string;
+}
 
+export async function GetUserInfoApi(email: string) {
+    const response = await fetch(`${API_URL}/api/account/user?email=${email}`, {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    });
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to fetch user info: ${errorText}`);
+    }
+    return response.json() as Promise<UserInfo>;
+}
 
 export async function RegisterApi(payload: Register) {
     const response = await fetch(`${API_URL}/api/account/register`, {
@@ -30,9 +50,6 @@ export async function RegisterApi(payload: Register) {
     const data = await response.json() as { token?: string; [key: string]: any };
     if (data && data.token) {
         localStorage.setItem('token', data.token);
-        localStorage.setItem('fullName', `${payload.firstName} ${payload.lastName}`);
-        localStorage.setItem('email', payload.email);
-        localStorage.setItem('photoUrl', data.photoUrl || '');
     }
 
     return data;
@@ -53,9 +70,6 @@ export async function LoginApi(payload: Login) {
     const data = await response.json() as { token?: string; [key: string]: any };
     if (data && data.token) {
         localStorage.setItem('token', data.token);
-        localStorage.setItem('fullName', data.fullName || '');
-        localStorage.setItem('email', payload.email);
-        localStorage.setItem('photoUrl', data.photoUrl || '');
     }
 }
 
@@ -65,4 +79,67 @@ export async function LogoutApi() {
 
 export function LoginWithGoogle() {
     window.location.href = `${API_URL}/api/account/login-google`;
+}
+
+/**
+ * Xử lý token từ URL sau khi redirect về từ backend
+ * Trả về true nếu tìm thấy và lưu token thành công
+ */
+export function handleAuthRedirect(): boolean {
+    // Lấy token từ URL query parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+    
+    if (token) {
+        // Lưu token vào localStorage
+        localStorage.setItem('token', token);
+        
+        // Xóa token khỏi URL để bảo mật
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, document.title, newUrl);
+        
+        return true;
+    }
+    
+    return false;
+}
+
+/**
+ * Kiểm tra xem user đã đăng nhập chưa
+ */
+export function isAuthenticated(): boolean {
+    return !!localStorage.getItem('token');
+}
+
+/**
+ * Lấy token hiện tại
+ */
+export function getToken(): string | null {
+    return localStorage.getItem('token');
+}
+
+/**
+ * Cập nhật thông tin user profile với FormData (bao gồm avatar)
+ */
+export async function UpdateUserProfileApi(formData: FormData) {
+    const token = localStorage.getItem('token');
+    if (!token) {
+        throw new Error('No authentication token found');
+    }
+
+    const response = await fetch(`${API_URL}/api/account/update-user`, {
+        method: 'PUT',
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            // Don't set Content-Type - browser will set it automatically with multipart/form-data boundary
+        },
+        body: formData,
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || 'Failed to update profile');
+    }
+
+    return response.json() as Promise<UserInfo>;
 }
