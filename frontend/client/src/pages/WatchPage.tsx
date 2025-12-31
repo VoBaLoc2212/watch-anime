@@ -154,20 +154,19 @@ export default function WatchPage() {
   }
 
   return (
-      <main className="px-8 py-6 max-w-7xl mx-auto space-y-8">
-        <VideoPlayer 
-          title={animeDetails?.animeName || ""} 
-          episode={currentEpisode} 
-          videoUrl={videoUrl}
-          duration={duration}
-          onPreviousEpisode={handlePreviousEpisode}
-          onNextEpisode={handleNextEpisode}
-          hasPreviousEpisode={currentEpisode > 1}
-          hasNextEpisode={currentEpisode < (animeDetails?.totalEpisodes || episodes.length)}
-        />
-
+      <main className="px-8 py-6 max-w-7xl mx-auto">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-8">
+            <VideoPlayer
+              title={animeDetails?.animeName || ""}
+              episode={currentEpisode}
+              videoUrl={videoUrl}
+              duration={duration}
+              onPreviousEpisode={handlePreviousEpisode}
+              onNextEpisode={handleNextEpisode}
+              hasPreviousEpisode={currentEpisode > 1}
+              hasNextEpisode={currentEpisode < (animeDetails?.totalEpisodes || episodes.length)}
+            />
             <Card>
               <CardHeader>
                 <CardTitle>{animeDetails?.animeName}</CardTitle>
@@ -186,15 +185,14 @@ export default function WatchPage() {
                 <p className="text-muted-foreground">{animeDetails?.description}</p>
               </CardContent>
             </Card>
+          </div>
 
+          <div className="space-y-8">
             <EpisodeGrid
               episodes={episodes}
               currentEpisode={currentEpisode}
               onEpisodeSelect={handleEpisodeSelect}
             />
-          </div>
-
-          <div className="space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle>Related Anime</CardTitle>
@@ -203,12 +201,12 @@ export default function WatchPage() {
                 {relatedAnime.map((anime) => (
                   <div
                     key={anime.id}
-                    className="flex gap-3 hover-elevate active-elevate-2 p-2 rounded-md cursor-pointer -m-2"
+                    className="flex gap-3 p-2 -m-2 rounded-md cursor-pointer hover-elevate active-elevate-2"
                   >
                     <img
                       src={anime.image}
                       alt={anime.title}
-                      className="w-20 h-28 object-cover rounded-md"
+                      className="object-cover rounded-md w-20 h-28"
                     />
                     <div className="flex-1">
                       <h4 className="font-semibold text-sm mb-1">{anime.title}</h4>
