@@ -70,6 +70,12 @@ namespace backend.Extensions
                 opt.CallbackPath = "/signin-google";
             });
 
+            services.AddAuthorization(options =>
+            {
+                options.AddPolicy("AdminOnly", policy => policy.RequireRole("Admin"));
+                options.AddPolicy("MemberSection", policy => policy.RequireRole("Admin,User"));
+            });
+
             return services;
         }
     }

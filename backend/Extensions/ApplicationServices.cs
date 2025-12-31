@@ -3,6 +3,7 @@ using backend.Helpers;
 using backend.Interface;
 using backend.Repository.UnitOfWork;
 using backend.Services;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 namespace backend.Extensions
@@ -34,10 +35,15 @@ namespace backend.Extensions
             services.AddScoped<IPasswordHasherService, PasswordHasherService>();
             services.AddScoped<IGoogleDriveService, GoogleDriveService>();
             services.AddScoped<IAuthService, AuthService>();
-            
+            services.AddScoped<IVideoService, VideoService>();
+
             services.AddScoped<IUnitOfWork, UnitOfWork>();
             services.AddAutoMapper(cfg => { }, AppDomain.CurrentDomain.GetAssemblies());
 
+            services.Configure<FormOptions>(opt =>
+            {
+               opt.MultipartBodyLengthLimit = long.MaxValue; // In case of need to upload large files
+            });
 
             return services;
         }

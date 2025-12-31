@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Play, Info, ChevronLeft, ChevronRight } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
+import { slugify } from "@/utils/slugify";
 
 interface HeroAnime {
   id: number;
@@ -72,7 +73,7 @@ export function HeroCarousel({ animes }: HeroCarouselProps) {
             {currentAnime.description}
           </p>
           <div className="flex gap-4">
-            <Link href={`/watch/${currentAnime.id}`}>
+            <Link href={`/watch?animeName=${slugify(currentAnime.title)}`}>
               <Button size="lg" className="gap-2" data-testid="button-play">
                 <Play className="h-5 w-5" />
                 Watch Now

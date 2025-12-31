@@ -5,6 +5,8 @@ interface LayoutProps {
 }
 
 export function Layout({ children }: LayoutProps) {
+  // Layout is public; token check moved to pages that require auth (e.g. WatchPage)
+  
   return (
     <div className="min-h-screen bg-background">
       <Navbar />

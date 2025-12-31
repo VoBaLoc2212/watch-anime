@@ -15,8 +15,12 @@ namespace backend.Helpers
                 .BeforeMap<ValidateBeforeMapAction<UserAuthDTO, User>>();
             CreateMap<UserAuthUpdateDTO, User>()
                 .BeforeMap<ValidateBeforeMapAction<UserAuthUpdateDTO, User>>();
+
             CreateMap<AnimeCreateDTO, Anime>()
                 .BeforeMap<ValidateBeforeMapAction<AnimeCreateDTO, Anime>>();
+            CreateMap<AnimeUpdateDTO, Anime>()
+                .BeforeMap<ValidateBeforeMapAction<AnimeUpdateDTO, Anime>>();
+
             CreateMap<EpisodeUploadDTO, Episode>()
                 .BeforeMap<ValidateBeforeMapAction<EpisodeUploadDTO, Episode>>();
         }

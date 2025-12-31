@@ -12,7 +12,7 @@ import { Upload, Film, Image as ImageIcon, X } from "lucide-react";
 import { useLocation } from "wouter";
 import ImageCropDialog from "@/components/ImageCropDialog";
 import { availableGenres, statusOptions } from "@/constants/animeConstants";
-import { AddAnimeApi } from "@/api/Anime";
+import { AddAnimeApi } from "@/api/AnimeAPI";
 import { set } from "date-fns";
 
 const animeUploadSchema = z.object({

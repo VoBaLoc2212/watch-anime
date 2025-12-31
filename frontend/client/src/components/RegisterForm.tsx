@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Link } from "wouter";
-import { RegisterApi } from "@/api/Auth";
+import { RegisterApi } from "@/api/AuthAPI";
 import { useState } from "react";
 
 const registerSchema = z.object({

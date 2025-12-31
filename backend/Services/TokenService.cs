@@ -20,7 +20,8 @@ namespace backend.Services
         {
             var claims = new List<Claim>
             {
-                new Claim(ClaimTypes.Name, user.Email)
+                new Claim(ClaimTypes.Email, user.Email),
+                new Claim(ClaimTypes.Role, user.Role.ToString())
 
             };
 
@@ -29,7 +30,7 @@ namespace backend.Services
             var tokenDescriptor = new SecurityTokenDescriptor
             {
                 Subject = new ClaimsIdentity(claims),
-                Expires = DateTime.Now.AddDays(1),
+                Expires = DateTime.Now.AddDays(7),
                 SigningCredentials = creds
             };
 

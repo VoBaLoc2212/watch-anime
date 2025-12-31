@@ -1,17 +1,32 @@
 import { HeroCarousel } from "@/components/HeroCarousel";
 import { AnimeRow } from "@/components/AnimeRow";
+import { GetAnimeListApi } from "@/api/AnimeAPI";
+import { useToast } from "@/hooks/use-toast";
+import { useQuery } from "@tanstack/react-query";
 import heroImage1 from "@assets/generated_images/hero_banner_anime_warrior.png";
 import heroImage2 from "@assets/generated_images/fantasy_battle_hero_banner.png";
-import magicalGirlImage from "@assets/generated_images/magical_girl_anime_poster.png";
-import darkFantasyImage from "@assets/generated_images/dark_fantasy_anime_poster.png";
-import schoolAnimeImage from "@assets/generated_images/school_anime_poster.png";
-import mechaImage from "@assets/generated_images/mecha_robot_anime_poster.png";
-import sportsImage from "@assets/generated_images/sports_anime_poster.png";
-import romanceImage from "@assets/generated_images/romance_anime_poster.png";
-import adventureImage from "@assets/generated_images/adventure_anime_poster.png";
-import cyberpunkImage from "@assets/generated_images/cyberpunk_anime_poster.png";
+import { Anime } from "@/models/AnimeModel";
+
 
 export default function Dashboard() {
+  const { toast } = useToast();
+
+  const { data: animes = [], isLoading, isError, error } = useQuery({
+    queryKey: ['animes'],
+    queryFn: GetAnimeListApi,
+    staleTime: 1000 * 60 * 5, // Cache dữ liệu trong 5 phút
+    gcTime: 1000 * 60 * 10, // Giữ cache trong 10 phút
+  });
+
+  // Hiển thị toast khi có lỗi
+  if (isError) {
+    toast({
+      title: "Error",
+      description: error instanceof Error ? error.message : "Failed to load anime list",
+      variant: "destructive",
+    });
+  }
+
   const heroAnimes = [
     {
       id: 1,
@@ -31,33 +46,55 @@ export default function Dashboard() {
     },
   ];
 
-  const continueWatching = [
-    { id: 1, title: "Magical Dreams", image: magicalGirlImage, episodes: 24, genres: ["Fantasy", "Action"] },
-    { id: 2, title: "Dark Realm", image: darkFantasyImage, episodes: 12, genres: ["Dark Fantasy", "Adventure"] },
-    { id: 3, title: "School Days", image: schoolAnimeImage, episodes: 13, genres: ["Slice of Life", "Comedy"] },
-  ];
+  // Sắp xếp theo rating (cao nhất) cho Trending Now
+  const trending: Anime[] = [...animes]
+    .sort((a, b) => b.rating - a.rating)
+    .slice(0, 8)
+    .map(anime => ({
+      slug: anime.slug,
+      animeName: anime.animeName,
+      description: anime.description,
+      thumbnailUrl: anime.thumbnailUrl,
+      totalEpisodes: anime.totalEpisodes || 0,
+      genres: anime.genres,
+      rating: anime.rating,
+      releaseYear: anime.releaseYear,
+      studio: anime.studio,
+      status: anime.status
+    }));
 
-  const trending = [
-    { id: 4, title: "Mecha Warriors", image: mechaImage, episodes: 26, genres: ["Mecha", "Sci-Fi"] },
-    { id: 5, title: "Victory Sprint", image: sportsImage, episodes: 24, genres: ["Sports", "Drama"] },
-    { id: 6, title: "Cherry Love", image: romanceImage, episodes: 12, genres: ["Romance", "Drama"] },
-    { id: 7, title: "Mountain Quest", image: adventureImage, episodes: 13, genres: ["Adventure", "Action"] },
-    { id: 8, title: "Cyber City", image: cyberpunkImage, episodes: 24, genres: ["Sci-Fi", "Thriller"] },
-  ];
+  // Sắp xếp theo releaseYear (mới nhất) cho New Releases
+  const newReleases: Anime[] = [...animes]
+    .sort((a, b) => b.releaseYear - a.releaseYear)
+    .slice(0, 8)
+    .map(anime => ({
+      slug: anime.slug,
+      animeName: anime.animeName,
+      description: anime.description,
+      thumbnailUrl: anime.thumbnailUrl,
+      totalEpisodes: anime.totalEpisodes || 0,
+      genres: anime.genres,
+      rating: anime.rating,
+      releaseYear: anime.releaseYear,
+      studio: anime.studio,
+      status: anime.status
+    }));
 
-  const newReleases = [
-    { id: 6, title: "Cherry Love", image: romanceImage, episodes: 12, genres: ["Romance", "Drama"] },
-    { id: 1, title: "Magical Dreams", image: magicalGirlImage, episodes: 24, genres: ["Fantasy", "Action"] },
-    { id: 7, title: "Mountain Quest", image: adventureImage, episodes: 13, genres: ["Adventure", "Action"] },
-    { id: 4, title: "Mecha Warriors", image: mechaImage, episodes: 26, genres: ["Mecha", "Sci-Fi"] },
-    { id: 8, title: "Cyber City", image: cyberpunkImage, episodes: 24, genres: ["Sci-Fi", "Thriller"] },
-  ];
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading anime...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
       <HeroCarousel animes={heroAnimes} />
       <div className="py-8 space-y-12">
-        <AnimeRow title="Continue Watching" animes={continueWatching} />
         <AnimeRow title="Trending Now" animes={trending} />
         <AnimeRow title="New Releases" animes={newReleases} />
       </div>

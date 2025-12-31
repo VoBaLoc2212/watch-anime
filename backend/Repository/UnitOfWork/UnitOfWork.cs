@@ -16,6 +16,7 @@ namespace backend.Repository.UnitOfWork
         public IAccountRepository Accounts => new AccountRepository(_context);
         public IAnimeRepository Animes => new AnimeRepository(_context);
         public IEpisodeRepository Episodes => new EpisodeRepository(_context);
+        public IRatingRepository Ratings => new RatingRepository(_context);
 
         public async Task<bool> Complete()
         {

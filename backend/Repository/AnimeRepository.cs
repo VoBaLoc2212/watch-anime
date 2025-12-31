@@ -12,5 +12,10 @@ namespace backend.Repository
         public AnimeRepository(AppDbContext context) : base(context)
         {
         }
+        public async Task<Anime> GetAnimeByNameSlug (string animeNameSlug)
+        {
+            return await _context.Animes.FirstOrDefaultAsync(a => a.Slug.Equals(animeNameSlug));
+        }
+        
     }
 }

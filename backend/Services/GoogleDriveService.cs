@@ -22,6 +22,11 @@ namespace backend.Services
             _config = config.Value;
         }
 
+        public string GetCloudflareWorkerUrl
+        {
+            get => _config.CloudflareWorker;
+        }
+
         private UserCredential GetUserCredential()
         {
             var clientSecrets = new ClientSecrets
@@ -299,54 +304,129 @@ namespace backend.Services
             }
         }
 
-        public async Task<string> UploadAnimeAsync(IFormFile file, string folderPath, string customName)
+        public async Task<string> UploadStreamAsync(Stream stream, string folderPath, string customFileName, string contentType = "video/mp4")
         {
-            string targetFolderId = await CreateFolderStructureAsync(folderPath, _config.FolderId);
-            string fileExtension = Path.GetExtension(file.FileName);
-            string finalName = customName;
-
-            // Nếu tên mới chưa có đuôi, thì ghép đuôi của file gốc vào
-            if (!finalName.EndsWith(fileExtension, StringComparison.OrdinalIgnoreCase))
+            // 1. Đảm bảo Stream ở vị trí đầu tiên
+            if (stream.CanSeek)
             {
-                finalName += fileExtension;
+                stream.Position = 0;
             }
 
+            // --- LOGIC MỚI: Xử lý tên file ---
+            string finalName = customFileName;
+
+            // Nếu contentType là video/mp4 mà tên chưa có đuôi .mp4 thì tự thêm vào
+            if (contentType == "video/mp4" && !finalName.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase))
+            {
+                finalName += ".mp4";
+            }
+            // --------------------------------
+
+            // 2. Tạo/Lấy folder đích
+            string targetFolderId = await CreateFolderStructureAsync(folderPath, _config.FolderId);
+
+            // 3. Chuẩn bị Metadata
             var service = GetDriveService();
             var driveFile = new Google.Apis.Drive.v3.Data.File()
             {
-                Name = finalName,
+                Name = finalName, // Sử dụng tên đã xử lý
                 Parents = new List<string> { targetFolderId }
             };
 
-            using var stream = file.OpenReadStream();
-            var uploadRequest = service.Files.Create(driveFile, stream, file.ContentType);
-
-            uploadRequest.ChunkSize = FilesResource.CreateMediaUpload.MinimumChunkSize * 40; // ~10MB mỗi chunk
+            // 4. Tạo request upload
+            var uploadRequest = service.Files.Create(driveFile, stream, contentType);
+            uploadRequest.ChunkSize = FilesResource.CreateMediaUpload.MinimumChunkSize * 40; // 10MB chunk
 
             uploadRequest.ProgressChanged += (IUploadProgress progress) =>
             {
                 switch (progress.Status)
                 {
                     case UploadStatus.Uploading:
-                        Console.WriteLine($"Đang tải lên: {progress.BytesSent} bytes");
+                        // Log ra tên file mới để dễ theo dõi
+                        Console.WriteLine($"[Drive Upload] {finalName}: {progress.BytesSent} bytes sent.");
                         break;
                     case UploadStatus.Completed:
-                        Console.WriteLine("Hoàn tất!");
+                        Console.WriteLine($"[Drive Upload] {finalName}: Hoàn tất!");
                         break;
                     case UploadStatus.Failed:
-                        Console.WriteLine("Lỗi: " + progress.Exception);
+                        Console.WriteLine($"[Drive Upload] {finalName} Lỗi: {progress.Exception}");
                         break;
                 }
             };
 
+            // 5. Thực hiện Upload
             var uploadResult = await uploadRequest.UploadAsync();
 
             if (uploadResult.Status != UploadStatus.Completed)
             {
-                throw new Exception($"Upload failed: {uploadResult.Exception?.Message}");
+                throw new Exception($"Upload to Drive failed: {uploadResult.Exception?.Message}");
             }
 
-            return uploadRequest.ResponseBody.Id;
+            // 6. Cấp quyền
+            var permission = new Google.Apis.Drive.v3.Data.Permission()
+            {
+                Type = "anyone",
+                Role = "reader"
+            };
+            await service.Permissions.Create(permission, uploadRequest.ResponseBody.Id).ExecuteAsync();
+
+            return $"{uploadRequest.ResponseBody.Id}";
         }
+
+
+        public async Task<bool> RenameFolderAsync(string parentPath, string currentFolderName, string newFolderName)
+        {
+            try
+            {
+                var service = GetDriveService();
+
+                //Tìm ID của folder cha (ví dụ: "anime")
+                // parentPath có thể là "anime" hoặc "root/anime"
+                string parentId = _config.FolderId; // Bắt đầu từ Root folder cấu hình
+
+                if (!string.IsNullOrEmpty(parentPath))
+                {
+                    var folderNames = parentPath.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+                    foreach (var name in folderNames)
+                    {
+                        parentId = await FindIdAsync(name, parentId, isFolder: true);
+                        if (parentId == null)
+                        {
+                            // Không tìm thấy đường dẫn cha
+                            return false;
+                        }
+                    }
+                }
+
+                // Tìm ID của Folder cần đổi tên nằm trong parentId
+                string folderIdToRename = await FindIdAsync(currentFolderName, parentId, isFolder: true);
+
+                if (folderIdToRename == null)
+                {
+                    // Không tìm thấy folder cũ để đổi tên
+                    return false;
+                }
+
+                // Bước 3: Thực hiện đổi tên
+                var fileMetadata = new Google.Apis.Drive.v3.Data.File()
+                {
+                    Name = newFolderName
+                };
+
+                var request = service.Files.Update(fileMetadata, folderIdToRename);
+                await request.ExecuteAsync();
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                // Log lỗi tại đây nếu cần thiết
+                Console.WriteLine($"Lỗi đổi tên folder: {ex.Message}");
+                return false;
+            }
+        }
+
+
     }
+
 }

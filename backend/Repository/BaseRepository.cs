@@ -1,7 +1,7 @@
 ﻿using backend.Data;
 using backend.Interface;
 using Microsoft.EntityFrameworkCore;
-
+using System.Linq.Expressions;
 namespace backend.Repository
 {
     public class BaseRepository<T> : IBaseRepository<T> where T : class
@@ -37,6 +37,26 @@ namespace backend.Repository
         public void Delete(T entity)
         {
             _dbSet.Remove(entity);
+        }
+
+        public async Task<bool> Any(Expression<Func<T, bool>> predicate)
+        {
+            return await _dbSet.AnyAsync(predicate);
+        }
+
+        public IQueryable<T> GetQueryable(params Expression<Func<T, object>>[] includes)
+        {
+            IQueryable<T> query = _dbSet;
+
+            if (includes != null)
+            {
+                foreach (var include in includes)
+                {
+                    query = query.Include(include);
+                }
+            }
+
+            return query;
         }
     }
 }

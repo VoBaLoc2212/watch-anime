@@ -156,12 +156,14 @@ export function Navbar() {
                     <KeyRound className="mr-2 h-4 w-4" />
                     Change Password
                   </DropdownMenuItem>
-                  <Link href="/manage-anime">
-                    <DropdownMenuItem data-testid="menu-item-profile">
-                      <User className="mr-2 h-4 w-4" />
-                      Anime Management
-                    </DropdownMenuItem>
-                  </Link>
+                  {userInfo?.role === "Admin" && (
+                    <Link href="/manage-anime">
+                      <DropdownMenuItem data-testid="menu-item-profile">
+                        <User className="mr-2 h-4 w-4" />
+                        Anime Management
+                      </DropdownMenuItem>
+                    </Link>
+                  )}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
                     onClick={handleLogout}

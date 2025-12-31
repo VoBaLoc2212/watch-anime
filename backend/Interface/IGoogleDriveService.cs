@@ -10,6 +10,9 @@ namespace backend.Interface
         Task<Stream> GetFileStreamAsync(string fileId, string rangeHeader = null);
         DriveService GetDriveService();
         Task<ICollection<EpisodeGetDTO>> GetEpisodesFromDrive();
-        Task<string> UploadAnimeAsync(IFormFile file, string folderPath, string customName);
+        Task<string> UploadStreamAsync(Stream stream, string folderPath, string customFileName, string contentType = "video/mp4");
+        Task<bool> RenameFolderAsync(string parentPath, string currentFolderName, string newFolderName);
+
+        string GetCloudflareWorkerUrl { get; }
     }
 }

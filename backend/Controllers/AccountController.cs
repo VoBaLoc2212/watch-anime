@@ -5,6 +5,7 @@ using Google.Apis.Drive.v3.Data;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 
@@ -158,5 +159,21 @@ namespace backend.Controllers
 
 
         }
+
+        [HttpPost("change-password")]
+        public async Task<ActionResult> ChangePassword([FromBody] UserAuthLoginDTO changePasswordDto)
+        {
+            var user = await _unitOfWork.Accounts.GetUserByEmail(changePasswordDto.Email);
+            if (user == null)
+                return BadRequest("User not found");
+            user.PasswordHash = await _hasherPasswordService.HashPassword(changePasswordDto.Password);
+
+            _unitOfWork.Accounts.Update(user);
+            if (await _unitOfWork.Complete())
+                return Ok(new { message = "Password changed successfully" });
+
+            return BadRequest(new { message = "Change password failed" });
+        }
+
     }
 }

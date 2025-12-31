@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -13,36 +13,30 @@ import {
 import { Search, Filter, Plus, Edit, Trash2, Eye } from "lucide-react";
 import { Link } from "wouter";
 import { availableGenres } from "@/constants/animeConstants";
-import magicalGirlImage from "@assets/generated_images/magical_girl_anime_poster.png";
-import darkFantasyImage from "@assets/generated_images/dark_fantasy_anime_poster.png";
-import schoolAnimeImage from "@assets/generated_images/school_anime_poster.png";
-import mechaImage from "@assets/generated_images/mecha_robot_anime_poster.png";
-import sportsImage from "@assets/generated_images/sports_anime_poster.png";
-import romanceImage from "@assets/generated_images/romance_anime_poster.png";
-import adventureImage from "@assets/generated_images/adventure_anime_poster.png";
-import cyberpunkImage from "@assets/generated_images/cyberpunk_anime_poster.png";
-import heroImage1 from "@assets/generated_images/hero_banner_anime_warrior.png";
-import heroImage2 from "@assets/generated_images/fantasy_battle_hero_banner.png";
-import { GetAnimeListApi } from "@/api/Anime";
+import { GetAnimeListApi } from "@/api/AnimeAPI";
 import { Anime } from "@/models/AnimeModel";
-
-
+import { useQuery } from "@tanstack/react-query";
+import { slugify } from "@/utils/slugify";
 
 export default function ManageAnime() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedGenre, setSelectedGenre] = useState<string>("all");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
-  const [sortBy, setSortBy] = useState<string>("title");
-  const [filteredAnimes, setFilteredAnimes] = useState<Anime[]>([]);
+  const [sortBy, setSortBy] = useState<string>("animeName");
 
+  const { data: animes = [], isLoading } = useQuery({
+    queryKey: ['animes'],
+    queryFn: GetAnimeListApi,
+    staleTime: 1000 * 60 * 5, // Cache dữ liệu trong 5 phút
+    gcTime: 1000 * 60 * 10, // Giữ cache trong 10 phút
+  });
 
-  useEffect(() => {
-    const fetchAndFilterAnimes = async () => {
-      let result = await GetAnimeListApi();
+  const filteredAnimes = useMemo(() => {
+    let result = [...animes];
 
-      // Filter by search query
-      if (searchQuery) {
-        result = result.filter(
+    // Filter by search query
+    if (searchQuery) {
+      result = result.filter(
         (anime: Anime) =>
           anime.animeName.toLowerCase().includes(searchQuery.toLowerCase()) ||
           anime.description.toLowerCase().includes(searchQuery.toLowerCase())
@@ -74,11 +68,8 @@ export default function ManageAnime() {
         break;
     }
 
-      setFilteredAnimes(result);
-    };
-
-    fetchAndFilterAnimes();
-  }, [searchQuery, selectedGenre, selectedStatus, sortBy]);
+    return result;
+  }, [animes, searchQuery, selectedGenre, selectedStatus, sortBy]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -120,7 +111,14 @@ export default function ManageAnime() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              <span className="ml-3 text-muted-foreground">Loading anime...</span>
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Search */}
             <div className="lg:col-span-2">
               <div className="relative">
@@ -179,11 +177,20 @@ export default function ManageAnime() {
               {filteredAnimes.length} anime{filteredAnimes.length !== 1 ? "s" : ""} found
             </span>
           </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
       {/* Anime Grid */}
-      {filteredAnimes.length === 0 ? (
+      {isLoading ? (
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading anime collection...</p>
+          </div>
+        </div>
+      ) : filteredAnimes.length === 0 ? (
         <Card className="p-12 text-center">
           <div className="text-muted-foreground">
             <Search className="h-12 w-12 mx-auto mb-4 opacity-50" />
@@ -194,7 +201,7 @@ export default function ManageAnime() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {filteredAnimes.map((anime) => (
-            <Card key={anime.id} className="overflow-hidden group hover:shadow-lg transition-shadow">
+            <Card key={anime.slug} className="overflow-hidden group hover:shadow-lg transition-shadow">
               {/* Thumbnail */}
               <div className="relative aspect-[2/3] overflow-hidden">
                 <img
@@ -239,16 +246,18 @@ export default function ManageAnime() {
 
                 {/* Actions */}
                 <div className="flex gap-2">
-                  <Link href={`/watch/${anime.id}`} className="flex-1">
+                  <Link href={`/watch?animeName=${slugify(anime.animeName)}`} className="flex-1">
                     <Button variant="default" size="sm" className="w-full gap-1">
                       <Eye className="h-3 w-3" />
                       View
                     </Button>
                   </Link>
-                  <Button variant="outline" size="sm" className="gap-1">
-                    <Edit className="h-3 w-3" />
-                    Edit
-                  </Button>
+                  <Link href={`/manage-anime/edit?animeName=${slugify(anime.animeName)}`}>
+                    <Button variant="outline" size="sm" className="gap-1">
+                      <Edit className="h-3 w-3" />
+                      Edit
+                    </Button>
+                  </Link>
                   <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive">
                     <Trash2 className="h-3 w-3" />
                   </Button>

@@ -46,12 +46,13 @@ namespace backend.Migrations
                         .IsRequired()
                         .HasColumnType("jsonb");
 
-                    b.Property<decimal>("Rating")
-                        .HasColumnType("numeric");
-
                     b.Property<string>("ReleaseYear")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<string>("Slug")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -76,6 +77,9 @@ namespace backend.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CreatedById");
+
+                    b.HasIndex("Slug")
+                        .IsUnique();
 
                     b.ToTable("Animes");
                 });
@@ -116,6 +120,39 @@ namespace backend.Migrations
                     b.ToTable("Episodes");
                 });
 
+            modelBuilder.Entity("backend.Models.Rating", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ReportedAnimeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Review")
+                        .HasColumnType("text");
+
+                    b.Property<int>("Score")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedById");
+
+                    b.HasIndex("ReportedAnimeId");
+
+                    b.ToTable("Ratings");
+                });
+
             modelBuilder.Entity("backend.Models.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -153,6 +190,10 @@ namespace backend.Migrations
                     b.Property<string>("PhotoUrl")
                         .HasColumnType("text");
 
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -183,14 +224,37 @@ namespace backend.Migrations
                     b.Navigation("Anime");
                 });
 
+            modelBuilder.Entity("backend.Models.Rating", b =>
+                {
+                    b.HasOne("backend.Models.User", "User")
+                        .WithMany("Ratings")
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("backend.Models.Anime", "Anime")
+                        .WithMany("Ratings")
+                        .HasForeignKey("ReportedAnimeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Anime");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("backend.Models.Anime", b =>
                 {
                     b.Navigation("Episodes");
+
+                    b.Navigation("Ratings");
                 });
 
             modelBuilder.Entity("backend.Models.User", b =>
                 {
                     b.Navigation("CreatedAnimes");
+
+                    b.Navigation("Ratings");
                 });
 #pragma warning restore 612, 618
         }

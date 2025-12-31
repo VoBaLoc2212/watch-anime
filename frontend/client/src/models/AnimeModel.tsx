@@ -1,5 +1,4 @@
 export interface Anime {
-  id: number
   thumbnailUrl: string
   animeName: string
   description: string
@@ -8,4 +7,6 @@ export interface Anime {
   status: string
   totalEpisodes: number
   genres: string[]
+  rating: number,
+  slug: string
 }

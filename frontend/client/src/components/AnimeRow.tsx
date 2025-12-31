@@ -2,14 +2,8 @@ import { AnimeCard } from "./AnimeCard";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRef, useState } from "react";
+import { Anime } from "@/models/AnimeModel";
 
-interface Anime {
-  id: number;
-  title: string;
-  image: string;
-  episodes: number;
-  genres: string[];
-}
 
 interface AnimeRowProps {
   title: string;
@@ -58,7 +52,7 @@ export function AnimeRow({ title, animes }: AnimeRowProps) {
           style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
         >
           {animes.map((anime) => (
-            <div key={anime.id} className="flex-none w-48">
+            <div key={anime.slug} className="flex-none w-48">
               <AnimeCard {...anime} />
             </div>
           ))}

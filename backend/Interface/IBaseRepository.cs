@@ -1,4 +1,6 @@
-﻿namespace backend.Interface
+﻿using System.Linq.Expressions;
+
+namespace backend.Interface
 {
     public interface IBaseRepository<T> where T : class
     {
@@ -7,5 +9,7 @@
         void Add(T entity);
         void Update(T entity);
         void Delete(T entity);
+        Task<bool> Any(Expression<Func<T, bool>> predicate);
+        IQueryable<T> GetQueryable(params Expression<Func<T, object>>[] includes);
     }
 }

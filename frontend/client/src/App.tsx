@@ -11,6 +11,8 @@ import Register from "@/pages/Register";
 import UserInformation from "@/pages/UserInformation";
 import UploadAnime from "@/pages/UploadAnime";
 import ManageAnime from "@/pages/ManageAnime";
+import EditAnime from "@/pages/EditAnime";
+import { useEffect } from "react";
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -39,7 +41,7 @@ function Router() {
           </Layout>
         )}
       </Route>
-      <Route path="/watch/:id">
+      <Route path="/watch">
         {() => (
           <Layout>
             <WatchPage />
@@ -67,6 +69,13 @@ function Router() {
           </Layout>
         )}
       </Route>
+      <Route path="/manage-anime/edit">
+        {() => (
+          <Layout>
+            <EditAnime />
+          </Layout>
+        )}
+      </Route>
       <Route>
         {() => (
           <Layout>
@@ -79,6 +88,24 @@ function Router() {
 }
 
 function App() {
+  // Suppress runtime errors from showing on UI, only log to console
+  useEffect(() => {
+    const handleError = (event: ErrorEvent) => {
+      console.error("Runtime error:", event.error);
+      event.preventDefault();
+    };
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      console.error("Unhandled promise rejection:", event.reason);
+      event.preventDefault();
+    };
+    window.addEventListener("error", handleError);
+    window.addEventListener("unhandledrejection", handleUnhandledRejection);
+    return () => {
+      window.removeEventListener("error", handleError);
+      window.removeEventListener("unhandledrejection", handleUnhandledRejection);
+    };
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>

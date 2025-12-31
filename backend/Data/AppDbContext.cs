@@ -14,10 +14,15 @@ namespace backend.Data
         public DbSet<Anime> Animes { get; set; }
         public DbSet<Episode> Episodes { get; set; }
 
+        public DbSet<Rating> Ratings { get; set; }
+
         protected override void OnModelCreating(ModelBuilder builder)
         {
             base.OnModelCreating(builder);
 
+            builder.Entity<User>()
+                .Property(u => u.Role)
+                .HasConversion<string>();
 
             builder.Entity<Anime>()
                 .Property(a => a.Genres)
@@ -38,6 +43,18 @@ namespace backend.Data
                 .WithMany(u => u.CreatedAnimes)
                 .HasForeignKey(a => a.CreatedById)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            builder.Entity<Rating>()
+                .HasOne(r => r.User)
+                .WithMany(u => u.Ratings)
+                .HasForeignKey(r => r.CreatedById)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.Entity<Rating>()
+                .HasOne(r => r.Anime)
+                .WithMany(a => a.Ratings)
+                .HasForeignKey(r => r.ReportedAnimeId)
+                .OnDelete(DeleteBehavior.Cascade);
         }
     }
 }

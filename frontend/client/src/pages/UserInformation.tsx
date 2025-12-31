@@ -24,7 +24,8 @@ import { DecodeToken, useUserInfo } from "@/hooks/useTokenUrl";
 import { useToast } from "@/hooks/use-toast";
 import { User, Mail, Phone, Save, Clock, Play } from "lucide-react";
 import { useLocation, Link } from "wouter";
-import { GetUserInfoApi, UpdateUserProfileApi } from "@/api/Auth";
+import { GetUserInfoApi, UpdateUserProfileApi } from "@/api/AuthAPI";
+import { slugify } from "@/utils/slugify";
 import magicalGirlImage from "@assets/generated_images/magical_girl_anime_poster.png";
 import darkFantasyImage from "@assets/generated_images/dark_fantasy_anime_poster.png";
 import schoolAnimeImage from "@assets/generated_images/school_anime_poster.png";
@@ -445,7 +446,7 @@ export default function UserInformation() {
             <CardContent>
               <div className="space-y-4">
                 {watchHistory.map((anime) => (
-                  <Link key={anime.id} href={`/watch/${anime.id}`}>
+                  <Link key={anime.id} href={`/watch?animeName=${slugify(anime.title)}`}>
                     <Card className="overflow-hidden hover:shadow-lg transition-shadow cursor-pointer group">
                       <div className="flex gap-4">
                         {/* Thumbnail */}

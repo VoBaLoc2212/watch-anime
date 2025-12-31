@@ -6,6 +6,8 @@
         IAnimeRepository Animes { get; }
         IEpisodeRepository Episodes { get; }
 
+        IRatingRepository Ratings { get; }
+
 
         Task<bool> Complete();
     }

@@ -1,4 +1,5 @@
 const API_URL = import.meta.env.API_URL ?? import.meta.env.VITE_API_URL;
+import { checkTokenAndLogout } from "@/utils/tokenUtils";
 
 interface Login{
     email: string;
@@ -122,6 +123,11 @@ export function getToken(): string | null {
  * Cập nhật thông tin user profile với FormData (bao gồm avatar)
  */
 export async function UpdateUserProfileApi(formData: FormData) {
+    // Check token expiration first
+    if (!checkTokenAndLogout()) {
+        throw new Error('Session expired. Please login again.');
+    }
+    
     const token = localStorage.getItem('token');
     if (!token) {
         throw new Error('No authentication token found');

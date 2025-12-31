@@ -7,7 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Link } from "wouter";
 import { useState } from "react";
-import { LoginApi, LoginWithGoogle } from "@/api/Auth";
+import { LoginApi, LoginWithGoogle } from "@/api/AuthAPI";
 import Login from "@/pages/Login";
 
 const loginSchema = z.object({

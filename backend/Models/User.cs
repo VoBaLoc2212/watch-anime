@@ -1,4 +1,5 @@
-﻿using System;
+﻿using backend.Enums;
+using System;
 using System.ComponentModel.DataAnnotations;
 
 namespace backend.Models
@@ -20,7 +21,9 @@ namespace backend.Models
 
         public ICollection<Anime> CreatedAnimes { get; set; }
 
+        public UserRole Role { get; set; } = UserRole.User;
 
+        public ICollection<Rating> Ratings { get; set; }
 
 
 
