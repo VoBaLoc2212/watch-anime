@@ -21,7 +21,8 @@ namespace backend.Services
             var claims = new List<Claim>
             {
                 new Claim(ClaimTypes.Email, user.Email),
-                new Claim(ClaimTypes.Role, user.Role.ToString())
+                new Claim(ClaimTypes.Role, user.Role.ToString()),
+                new Claim("HasPassword", (!string.IsNullOrEmpty(user.PasswordHash)).ToString())
 
             };
 

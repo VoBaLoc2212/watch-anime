@@ -1,5 +1,6 @@
 ﻿using AutoMapper;
 using backend.DTOs;
+using backend.Extensions;
 using backend.Interface;
 using Google.Apis.Drive.v3.Data;
 using Microsoft.AspNetCore.Authentication;
@@ -112,7 +113,7 @@ namespace backend.Controllers
             var result = await HttpContext.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
 
             if (!result.Succeeded)
-                return BadRequest("Xác thực Google thất bại.");
+                return BadRequest(new {message = "Google authentication failed." });
 
             // 2. Trích xuất thông tin
             var email = result.Principal.FindFirstValue(ClaimTypes.Email);
@@ -133,7 +134,7 @@ namespace backend.Controllers
         {
             var user = await _unitOfWork.Accounts.GetUserByEmail(updateDto.Email);
             if (user == null)
-                return BadRequest("User not found");
+                return BadRequest(new {message = "User not found" });
             var userUpdated = _mapper.Map<UserAuthUpdateDTO, Models.User>(updateDto, user);
 
             if (updateDto.Avatar != null)
@@ -146,7 +147,7 @@ namespace backend.Controllers
             _unitOfWork.Accounts.Update(user);
 
             if(!(await _unitOfWork.Complete()))
-                return BadRequest("Update failed");
+                return BadRequest(new {message = "Update failed" });
 
             return Ok(new UserAuthGetUserInformation
             {
@@ -160,17 +161,28 @@ namespace backend.Controllers
 
         }
 
+        [Authorize]
         [HttpPost("change-password")]
-        public async Task<ActionResult> ChangePassword([FromBody] UserAuthLoginDTO changePasswordDto)
+        public async Task<ActionResult<string>> ChangePassword([FromBody] UserAuthChangePasswordDTO userAuthChangePassword)
         {
-            var user = await _unitOfWork.Accounts.GetUserByEmail(changePasswordDto.Email);
+            var user = await _unitOfWork.Accounts.GetUserByEmail(User.GetEmail());
             if (user == null)
-                return BadRequest("User not found");
-            user.PasswordHash = await _hasherPasswordService.HashPassword(changePasswordDto.Password);
+                return BadRequest(new {message = "User not found" });
+            if(!string.IsNullOrEmpty(user.PasswordHash) && !string.IsNullOrEmpty(userAuthChangePassword.OldPassword))
+            {
+                bool isOldPasswordValid = await _hasherPasswordService.VerifyPassword(user.PasswordHash, userAuthChangePassword.OldPassword);
+                if (!isOldPasswordValid)
+                    return BadRequest(new { message = "Old password is incorrect" });
+            }
+
+            user.PasswordHash = await _hasherPasswordService.HashPassword(userAuthChangePassword.NewPassword);
 
             _unitOfWork.Accounts.Update(user);
             if (await _unitOfWork.Complete())
-                return Ok(new { message = "Password changed successfully" });
+            {
+                string token = await _tokenService.CreateToken(user);
+                return Ok(new {token = token });
+            }
 
             return BadRequest(new { message = "Change password failed" });
         }

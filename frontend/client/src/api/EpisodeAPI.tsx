@@ -3,6 +3,84 @@ import { Episode } from "@/models/EpisodeModel";
 import { checkTokenAndLogout } from "@/utils/tokenUtils";
 
 /**
+ * Get SAS Token for direct upload to Azure Blob
+ */
+export const GetSASTokenForEpisodeUploadApi = async (fileName: string, animeName: string, episodeNumber: string) => {
+    if (!checkTokenAndLogout()) {
+        throw new Error('Session expired. Please login again.');
+    }
+    
+    const uri = `fileName=${encodeURIComponent(fileName)}&animeName=${encodeURIComponent(animeName)}&episodeNumber=${encodeURIComponent(episodeNumber)}`;
+
+    const token = localStorage.getItem('token');
+    if (!token) {
+        throw new Error('No authentication token found');
+    }
+
+    const response = await fetch(`${API_URL}/api/episode/get-upload-link?${uri}}`, {
+        method: 'GET',
+        headers: {
+            'Authorization': `Bearer ${token}`
+        }
+    });
+
+    if (!response.ok) {
+        if (response.status === 401) {
+            localStorage.removeItem('token');
+            localStorage.removeItem('userInfo');
+            window.dispatchEvent(new Event('storage'));
+            throw new Error('Session expired. Please login again.');
+        }
+        const errorText = await response.text();
+        throw new Error(errorText || 'Failed to get upload link');
+    }
+
+    return response.json() as Promise<{ uploadUrl: string; fileName: string }>;
+};
+
+/**
+ * Create episode metadata after video upload
+ */
+export const CreateEpisodeApi = async (episodeData: {
+    animeSlug: string;
+    episodeNumber: number;
+    episodeName: string;
+    videoFileName: string;
+    duration: string;
+}) => {
+    if (!checkTokenAndLogout()) {
+        throw new Error('Session expired. Please login again.');
+    }
+    
+    const token = localStorage.getItem('token');
+    if (!token) {
+        throw new Error('No authentication token found');
+    }
+
+    const response = await fetch(`${API_URL}/api/episode/create-episode`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(episodeData)
+    });
+
+    if (!response.ok) {
+        if (response.status === 401) {
+            localStorage.removeItem('token');
+            localStorage.removeItem('userInfo');
+            window.dispatchEvent(new Event('storage'));
+            throw new Error('Session expired. Please login again.');
+        }
+        const errorText = await response.text();
+        throw new Error(errorText || 'Failed to create episode');
+    }
+
+    return response.json();
+};
+
+/**
  * Upload a single chunk of an episode video file
  */
 export const UploadEpisodeChunkApi = async (formData: FormData) => {

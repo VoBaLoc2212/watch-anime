@@ -34,7 +34,7 @@ namespace backend.Controllers
 
             if (!(await Animes.AnyAsync()))
             {
-                return NotFound(new {message = "Anime video not found" });
+                return Ok(new List<AnimeGetDTO>());
             }
 
             var animeDTOs = Animes.Select((anime) => new AnimeGetDTO

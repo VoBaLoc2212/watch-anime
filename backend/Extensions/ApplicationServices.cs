@@ -16,7 +16,7 @@ namespace backend.Extensions
             services.AddCors();
 
 
-            var connectionString = config.GetConnectionString("DefaultConnection");
+            var connectionString = config.GetConnectionString("DatabaseConnectionString");
             var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
             dataSourceBuilder.EnableDynamicJson();
             var dataSource = dataSourceBuilder.Build();
@@ -36,6 +36,7 @@ namespace backend.Extensions
             services.AddScoped<IGoogleDriveService, GoogleDriveService>();
             services.AddScoped<IAuthService, AuthService>();
             services.AddScoped<IVideoService, VideoService>();
+            services.AddScoped<IBlobAzureService, BlobAzureService>();
 
             services.AddScoped<IUnitOfWork, UnitOfWork>();
             services.AddAutoMapper(cfg => { }, AppDomain.CurrentDomain.GetAssemblies());

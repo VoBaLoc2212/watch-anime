@@ -341,7 +341,7 @@ export function VideoPlayer({
             setIsLoadingVideo(false);
             
             // 2. QUAN TRỌNG: Chuyển playing về false
-            // Để nút Play to giữa màn hình hiện ra lại -> User bấm vào đó sẽ hết lỗi
+            // Để nút Play to giữa màn hình hiện ra lại -> User bấm vào đó sẽ hết Error
             setState(prev => ({ ...prev, playing: false }));
         }}
           onTimeUpdate={handleTimeUpdate}

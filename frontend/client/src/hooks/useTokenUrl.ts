@@ -57,12 +57,13 @@ export function useUserInfo() {
 }
 
 
-interface MyJwtPayload {
+export interface MyJwtPayload {
   nameid?: string[];
   email?: string;
   photoUrl?: string;
   exp?: number;
   iat?: number;
+  HasPassword?: string;
   // Common role claim keys
   role?: string | string[];
   roles?: string[];

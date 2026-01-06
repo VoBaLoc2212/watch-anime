@@ -29,7 +29,7 @@ namespace backend.Services
                 int width = videoStream.Width;
                 int height = videoStream.Height;
 
-                // FIX LỖI: Đảm bảo width/height là số chẵn (FFmpeg yêu cầu yuv420p phải chia hết cho 2)
+                // FIX Error: Đảm bảo width/height là số chẵn (FFmpeg yêu cầu yuv420p phải chia hết cho 2)
                 if (width % 2 != 0) width++;
                 if (height % 2 != 0) height++;
 
@@ -45,7 +45,7 @@ namespace backend.Services
                         .WithAudioBitrate(128)
                         .WithSpeedPreset(Speed.VeryFast)
 
-                        // QUAN TRỌNG: Gán cứng kích thước để tránh lỗi 1920x0
+                        // QUAN TRỌNG: Gán cứng kích thước để tránh Error 1920x0
                         .Resize(width, height)
 
                         .ForceFormat("mp4")

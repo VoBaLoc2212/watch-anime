@@ -20,14 +20,16 @@ namespace backend.Controllers
         private readonly IWebHostEnvironment _environment;
         private readonly IVideoService _videoService;
         private readonly IServiceScopeFactory _scopeFactory;
+        private readonly IBlobAzureService _blobService;
 
-        public EpisodeController(IUnitOfWork uow, IGoogleDriveService ggDrive, IWebHostEnvironment environment, IVideoService videoService, IServiceScopeFactory scopeFactory)
+        public EpisodeController(IUnitOfWork uow, IGoogleDriveService ggDrive, IWebHostEnvironment environment, IVideoService videoService, IServiceScopeFactory scopeFactory, IBlobAzureService blobService)
         {
             _uow = uow;
             _ggDrive = ggDrive;
             _environment = environment;
             _videoService = videoService;
             _scopeFactory = scopeFactory;
+            _blobService = blobService;
         }
 
         [HttpGet("get-animeepisodes")]
@@ -61,141 +63,70 @@ namespace backend.Controllers
         }
 
         [Authorize(Policy = "AdminOnly")]
-        [HttpPost("upload-episode-chunk")]
-        [RequestSizeLimit(100_000_000)] // 100MB
-        public async Task<IActionResult> UploadEpisodeChunk([FromForm] EpisodeUploadDTO dto)
+        [HttpPost("get-upload-link")]
+        public IActionResult GetUploadLink([FromQuery] string fileName, [FromQuery] string animeName, [FromQuery] string episodeNumber)
         {
-            try
+            // 1. Xử lý tên Anime cho sạch (Slugify)
+            // Ví dụ: "Naruto Shippuden" -> "naruto-shippuden"
+            string safeAnimeName = ToUrlSlug(animeName);
+
+            // 2. Lấy đuôi file gốc (ví dụ .mp4)
+            string extension = Path.GetExtension(fileName);
+
+            // 3. TẠO CẤU TRÚC THƯ MỤC Ở ĐÂY
+            // Format: anime/{ten-anime}/{so-tap}.mp4
+            // Ví dụ: anime/naruto-shippuden/1.mp4
+            string fullBlobName = $"anime/{safeAnimeName}/{episodeNumber}{extension}";
+
+            // 4. Tạo SAS Token cho cái đường dẫn dài ngoằng đó
+            // Lưu ý: _blobService.GetSasToken không cần sửa, vì nó nhận blobName là string
+            var uploadUrl = _blobService.GetSasToken("media", fullBlobName);
+
+            return Ok(new
             {
-                // 1. Tạo đường dẫn lưu file tạm
-                string tempFolder = Path.Combine(_environment.WebRootPath, "temp", dto.UploadId);
-                if (!Directory.Exists(tempFolder)) Directory.CreateDirectory(tempFolder);
-
-                string filePath = Path.Combine(tempFolder, dto.FileName);
-
-                // 2. Append (Nối) dữ liệu
-                using (var stream = new FileStream(filePath, FileMode.Append, FileAccess.Write, FileShare.None))
-                {
-                    await dto.FileChunk.CopyToAsync(stream);
-                }
-
-                // 3. Kiểm tra Chunk cuối cùng
-                if (dto.ChunkIndex == dto.TotalChunks - 1)
-                {
-                    // === QUAN TRỌNG: Fire & Forget ===
-                    // Chạy task nén ở luồng khác, không bắt User phải chờ
-                    _ = Task.Run(async () =>
-                    {
-                        await ProcessVideoBackground(filePath, dto);
-                    });
-
-                    // Trả về kết quả NGAY LẬP TỨC
-                    return Ok(new
-                    {
-                        isCompleted = true,
-                        message = "Upload completed. Processing started in background."
-                    });
-                }
-
-                return Ok(new { isCompleted = false, chunkIndex = dto.ChunkIndex });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, $"Internal server error: {ex.Message}");
-            }
+                uploadUrl = uploadUrl,
+                blobName = fullBlobName // Trả về cái tên này để Frontend biết mà lưu vào DB
+            });
+        }
+        private string ToUrlSlug(string value)
+        {
+            // Bạn có thể tìm hàm Slugify xịn hơn trên mạng, đây là ví dụ đơn giản
+            return value.ToLower()
+                .Replace(" ", "-")
+                .Replace("đ", "d")
+                // ... (xử lý thêm tiếng Việt có dấu nếu cần) ...
+                ;
         }
 
-        // Hàm xử lý ngầm (Chạy sau khi đã trả response cho client)
-        private async Task ProcessVideoBackground(string inputPath, EpisodeUploadDTO dto)
+        [HttpPost("create-episode")]
+        [Authorize(Policy = "AdminOnly")]
+        public async Task<ActionResult> CreateEpisode([FromBody] EpisodeUploadDTO episodeDTO)
         {
-            string compressedFilePath = "";
-            try
+            var anime = await _uow.Animes.GetAnimeByNameSlug(episodeDTO.AnimeSlug);
+            if (anime == null)
             {
-                // A. Đổi tên file & B. Nén Video (Giữ nguyên)
-                string fileNameWithoutExt = Path.GetFileNameWithoutExtension(inputPath);
-                compressedFilePath = Path.Combine(Path.GetDirectoryName(inputPath), $"{fileNameWithoutExt}_compressed.mp4");
-
-                Console.WriteLine($"[Processing] Start compressing: {dto.FileName}");
-                bool compressResult = await _videoService.CompressAndConvertToMp4Async(inputPath, compressedFilePath);
-
-                if (!compressResult) return;
-
-                string animeName = "Unknown";
-
-                // Tạo scope nhỏ chỉ để lấy tên Anime rồi hủy ngay (để không giữ kết nối DB lâu)
-                using (var scope = _scopeFactory.CreateScope())
-                {
-                    var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-
-                    var anime = await uow.Animes.GetAnimeByNameSlug(dto.AnimeSlug);
-                    if (anime != null)
-                    {
-                        animeName = anime.AnimeName;
-                    }
-                }
-                // Kết thúc khối này, kết nối DB đóng lại, an toàn.
-
-                // C. Upload lên Google Drive
-                Console.WriteLine($"[Processing] Start uploading to Drive...");
-
-                // Dùng using cho FileStream để tránh leak memory
-                using (var stream = new FileStream(compressedFilePath, FileMode.Open, FileAccess.Read))
-                {
-                    string videoUrl = await _ggDrive.UploadStreamAsync(
-                            stream,
-                            $"anime/{animeName}/{dto.EpisodeNumber}", // Dùng biến animeName vừa lấy
-                            $"{animeName} - Episode {dto.EpisodeNumber}",
-                            "video/mp4"
-                    );
-
-                    // D. Cập nhật database (Tạo scope mới lần nữa để lưu)
-                    using (var scope = _scopeFactory.CreateScope())
-                    {
-                        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-
-
-                        // Vì dto.AnimeSlug là string, cần đảm bảo Logic Add Episode của bạn xử lý đúng
-                        // Nếu cần AnimeId, bạn lại phải query lại trong scope này
-                        var animeInDb = await dbContext.Animes.FirstOrDefaultAsync(a => a.Slug == dto.AnimeSlug);
-                        if (animeInDb == null)
-                        {
-                            Console.WriteLine($"[Error] Anime not found for slug: {dto.AnimeSlug}");
-                            return;
-                        }
-
-                        var episode = new Episode
-                        {
-                            AnimeId = animeInDb.Id, // Quan trọng: Gán khóa ngoại
-                            EpisodeNumber = dto.EpisodeNumber,
-                            EpisodeName = dto.EpisodeName, // Hoặc dto.Name tùy DTO của bạn
-                            Duration = dto.Duration,       // Giả sử DTO và Entity cùng kiểu TimeOnly
-                            VideoUrl = videoUrl
-                            // Gán thêm các trường khác nếu có
-                        };
-
-                        dbContext.Episodes.Add(episode);
-                        await dbContext.SaveChangesAsync();
-                    }
-                }
-
-                Console.WriteLine("[Success] Video processed and uploaded.");
+                return NotFound(new { message = "Anime not found" });
             }
-            catch (Exception ex)
+            var newEpisode = new Episode
             {
-                Console.WriteLine($"[Background Error] {ex.Message}");
-            }
-            finally
+                EpisodeName = episodeDTO.EpisodeName,
+                EpisodeNumber = episodeDTO.EpisodeNumber,
+                Duration = episodeDTO.Duration,
+                VideoUrl = episodeDTO.VideoFileName, // Lưu tên file (blobName) chứ không phải URL đầy đủ
+                AnimeId = anime.Id
+            };
+            anime.Episodes.Add(newEpisode);
+            _uow.Animes.Update(anime);
+            if (await _uow.Complete())
             {
-                // E. Dọn dẹp rác (Giữ nguyên)
-                if (System.IO.File.Exists(inputPath)) System.IO.File.Delete(inputPath);
-                if (System.IO.File.Exists(compressedFilePath)) System.IO.File.Delete(compressedFilePath);
-
-                string folder = Path.GetDirectoryName(inputPath);
-                if (Directory.Exists(folder) && !Directory.EnumerateFileSystemEntries(folder).Any())
-                {
-                    Directory.Delete(folder);
-                }
+                return Ok(new { message = "Episode created successfully" });
             }
+            else
+            {
+                return BadRequest(new { message = "Failed to create episode" });
+            }
+
+
         }
     }
 }

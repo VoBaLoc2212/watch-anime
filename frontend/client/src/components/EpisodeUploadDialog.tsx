@@ -5,8 +5,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, FileVideo, CheckCircle2, Loader2 } from "lucide-react";
-import { UploadEpisodeChunkApi } from "@/api/EpisodeAPI";
+import { Upload, FileVideo, CheckCircle2, Loader2, X } from "lucide-react";
+import { GetSASTokenForEpisodeUploadApi, CreateEpisodeApi } from "@/api/EpisodeAPI";
+import { BlockBlobClient } from "@azure/storage-blob";
 
 interface EpisodeUploadDialogProps {
   open: boolean;
@@ -16,21 +17,20 @@ interface EpisodeUploadDialogProps {
   onUploadSuccess?: () => void;
 }
 
-const CHUNK_SIZE = 10 * 1024 * 1024; // 100MB per chunk
-
 type UploadState = 'idle' | 'uploading' | 'processing' | 'completed';
 
 export default function EpisodeUploadDialog({ open, onClose, animeSlug, animeName, onUploadSuccess }: EpisodeUploadDialogProps) {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoPreviewRef = useRef<HTMLVideoElement>(null);
   
   const [episodeNumber, setEpisodeNumber] = useState<string>("");
   const [episodeName, setEpisodeName] = useState<string>("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [videoPreviewUrl, setVideoPreviewUrl] = useState<string>("");
   const [videoDuration, setVideoDuration] = useState<number>(0);
   const [uploadState, setUploadState] = useState<UploadState>('idle');
   const [uploadProgress, setUploadProgress] = useState<number>(0);
-  const [uploadId, setUploadId] = useState<string>("");
 
   // Convert seconds to TimeOnly format (HH:mm:ss)
   const formatDurationForBackend = (seconds: number): string => {
@@ -66,6 +66,10 @@ export default function EpisodeUploadDialog({ open, onClose, animeSlug, animeNam
       return;
     }
 
+    // Create preview URL
+    const previewUrl = URL.createObjectURL(file);
+    setVideoPreviewUrl(previewUrl);
+
     // Extract video duration
     const video = document.createElement('video');
     video.preload = 'metadata';
@@ -73,7 +77,7 @@ export default function EpisodeUploadDialog({ open, onClose, animeSlug, animeNam
       window.URL.revokeObjectURL(video.src);
       setVideoDuration(Math.round(video.duration));
     };
-    video.src = URL.createObjectURL(file);
+    video.src = previewUrl;
 
     setSelectedFile(file);
   };
@@ -109,66 +113,48 @@ export default function EpisodeUploadDialog({ open, onClose, animeSlug, animeNam
     try {
       setUploadState('uploading');
       setUploadProgress(0);
+
+      // Step 1: Get SAS Token from backend
+      const { uploadUrl, fileName } = await GetSASTokenForEpisodeUploadApi(selectedFile.name,animeName, episodeNumber);
+
+      // Step 2: Upload directly to Azure Blob with progress tracking
+      const blockBlobClient = new BlockBlobClient(uploadUrl);
       
-      // Generate unique upload ID
-      const newUploadId = `${animeSlug}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      setUploadId(newUploadId);
-
-      const totalChunks = Math.ceil(selectedFile.size / CHUNK_SIZE);
-      const fileName = selectedFile.name;
-
-      // Upload chunks sequentially
-      for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
-        const start = chunkIndex * CHUNK_SIZE;
-        const end = Math.min(start + CHUNK_SIZE, selectedFile.size);
-        const chunkBlob = selectedFile.slice(start, end);
-
-        const formData = new FormData();
-        formData.append('fileChunk', chunkBlob);
-        formData.append('chunkIndex', chunkIndex.toString());
-        formData.append('totalChunks', totalChunks.toString());
-        formData.append('fileName', fileName);
-        formData.append('uploadId', newUploadId);
-        formData.append('animeSlug', animeSlug);
-        formData.append('episodeNumber', episodeNumber);
-        formData.append('episodeName', episodeName);
-        formData.append('duration', formatDurationForBackend(videoDuration));
-
-        // Upload this chunk
-        const response = await UploadEpisodeChunkApi(formData);
-
-        // Update progress
-        const progress = Math.round(((chunkIndex + 1) / totalChunks) * 100);
-        setUploadProgress(progress);
-        
-        // Check if this is the last chunk and upload is completed
-        if (chunkIndex === totalChunks - 1 && response.isCompleted) {
-          // All chunks uploaded successfully
-          setUploadState('processing');
-          
-          toast({
-            title: "Upload completed",
-            description: response.message || "Video is now being processed on the server. This may take several minutes.",
-          });
-
-          // Wait 3 seconds before closing to show the message
-          setTimeout(() => {
-            setUploadState('completed');
-            resetDialog();
-            onClose();
-            
-            // Call the success callback to refresh episodes list
-            if (onUploadSuccess) {
-              onUploadSuccess();
-            }
-            
-            toast({
-              title: "Processing started",
-              description: "You can leave this page. The episode will be available once processing is complete.",
-            });
-          }, 3000);
+      await blockBlobClient.uploadData(selectedFile, {
+        onProgress: (progress) => {
+          const percent = Math.round((progress.loadedBytes / selectedFile.size) * 100);
+          setUploadProgress(percent);
+        },
+        blobHTTPHeaders: {
+          blobContentType: selectedFile.type
         }
-      }
+      });
+
+      // Step 3: Create episode metadata in database
+      setUploadState('processing');
+      await CreateEpisodeApi({
+        animeSlug,
+        episodeNumber: parseInt(episodeNumber),
+        episodeName: episodeName.trim(),
+        videoFileName: episodeNumber,
+        duration: formatDurationForBackend(videoDuration)
+      });
+
+      setUploadState('completed');
+      
+      toast({
+        title: "Upload completed",
+        description: "Episode uploaded successfully",
+      });
+
+      // Wait a bit before closing
+      setTimeout(() => {
+        resetDialog();
+        onClose();
+        if (onUploadSuccess) {
+          onUploadSuccess();
+        }
+      }, 1500);
 
     } catch (error) {
       console.error("Upload error:", error);
@@ -187,13 +173,16 @@ export default function EpisodeUploadDialog({ open, onClose, animeSlug, animeNam
   };
 
   const resetDialog = () => {
+    if (videoPreviewUrl) {
+      URL.revokeObjectURL(videoPreviewUrl);
+    }
     setSelectedFile(null);
+    setVideoPreviewUrl("");
     setEpisodeNumber("");
     setEpisodeName("");
     setVideoDuration(0);
     setUploadProgress(0);
     setUploadState('idle');
-    setUploadId("");
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -219,9 +208,20 @@ export default function EpisodeUploadDialog({ open, onClose, animeSlug, animeNam
     return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
   };
 
+  const removeSelectedFile = () => {
+    if (videoPreviewUrl) {
+      URL.revokeObjectURL(videoPreviewUrl);
+    }
+    setSelectedFile(null);
+    setVideoPreviewUrl("");
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Upload Episode</DialogTitle>
           <DialogDescription>
@@ -229,108 +229,157 @@ export default function EpisodeUploadDialog({ open, onClose, animeSlug, animeNam
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
-          {/* Episode Number */}
-          <div className="space-y-2">
-            <Label htmlFor="episode-number">Episode Number *</Label>
-            <Input
-              id="episode-number"
-              type="number"
-              min="1"
-              placeholder="1"
-              value={episodeNumber}
-              onChange={(e) => setEpisodeNumber(e.target.value)}
-              disabled={uploadState !== 'idle'}
-            />
-          </div>
-
-          {/* Episode Name */}
-          <div className="space-y-2">
-            <Label htmlFor="episode-name">Episode Name *</Label>
-            <Input
-              id="episode-name"
-              type="text"
-              placeholder="Enter episode name"
-              value={episodeName}
-              onChange={(e) => setEpisodeName(e.target.value)}
-              disabled={uploadState !== 'idle'}
-            />
-          </div>
-
-          {/* File Upload */}
-          <div className="space-y-2">
-            <Label htmlFor="video-file">Video File *</Label>
-            <div className="flex items-center gap-2">
-              <input
-                ref={fileInputRef}
-                id="video-file"
-                type="file"
-                accept="video/*"
-                onChange={handleFileSelect}
-                className="hidden"
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
+          {/* Left Side - Episode Info */}
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="episode-number">Episode Number *</Label>
+              <Input
+                id="episode-number"
+                type="number"
+                min="1"
+                placeholder="1"
+                value={episodeNumber}
+                onChange={(e) => setEpisodeNumber(e.target.value)}
                 disabled={uploadState !== 'idle'}
               />
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploadState !== 'idle'}
-              >
-                <Upload className="h-4 w-4 mr-2" />
-                {selectedFile ? "Change Video" : "Select Video"}
-              </Button>
             </div>
-            {selectedFile && (
-              <div className="flex items-center gap-2 p-3 bg-muted rounded-md">
-                <FileVideo className="h-5 w-5 text-muted-foreground" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{selectedFile.name}</p>
-                  <p className="text-xs text-muted-foreground">{formatFileSize(selectedFile.size)}</p>
+
+            <div className="space-y-2">
+              <Label htmlFor="episode-name">Episode Name *</Label>
+              <Input
+                id="episode-name"
+                type="text"
+                placeholder="Enter episode name"
+                value={episodeName}
+                onChange={(e) => setEpisodeName(e.target.value)}
+                disabled={uploadState !== 'idle'}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="video-file">Video File *</Label>
+              <div className="flex items-center gap-2">
+                <input
+                  ref={fileInputRef}
+                  id="video-file"
+                  type="file"
+                  accept="video/*"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                  disabled={uploadState !== 'idle'}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadState !== 'idle'}
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  {selectedFile ? "Change Video" : "Select Video"}
+                </Button>
+              </div>
+              {selectedFile && (
+                <div className="flex items-center gap-2 p-3 bg-muted rounded-md">
+                  <FileVideo className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{selectedFile.name}</p>
+                    <p className="text-xs text-muted-foreground">{formatFileSize(selectedFile.size)}</p>
+                  </div>
+                  {uploadState === 'idle' && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={removeSelectedFile}
+                      className="flex-shrink-0"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Right Side - Video Preview & Progress */}
+          <div className="space-y-4">
+            {/* Video Preview */}
+            {selectedFile && videoPreviewUrl && (
+              <div className="space-y-2">
+                <Label>Video Preview</Label>
+                <div className="relative aspect-video bg-black rounded-lg overflow-hidden">
+                  <video
+                    ref={videoPreviewRef}
+                    src={videoPreviewUrl}
+                    controls
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Upload Progress */}
+            {uploadState !== 'idle' && (
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-medium">
+                      {uploadState === 'uploading' && 'Đang tải lên...'}
+                      {uploadState === 'processing' && 'Đang xử lý...'}
+                      {uploadState === 'completed' && 'Hoàn tất!'}
+                    </span>
+                    <span className="text-muted-foreground font-mono">
+                      {uploadProgress}%
+                    </span>
+                  </div>
+                  <Progress value={uploadProgress} className="h-3" />
+                </div>
+
+                {uploadState === 'uploading' && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Uploading to Azure Blob Storage...</span>
+                  </div>
+                )}
+
+                {uploadState === 'processing' && (
+                  <div className="flex items-start gap-2 p-3 bg-blue-50 dark:bg-blue-950 rounded-md">
+                    <Loader2 className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5 animate-spin" />
+                    <div className="flex-1 text-sm">
+                      <p className="font-medium text-blue-900 dark:text-blue-100">
+                        Creating episode metadata...
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {uploadState === 'completed' && (
+                  <div className="flex items-start gap-2 p-3 bg-green-50 dark:bg-green-950 rounded-md">
+                    <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1 text-sm">
+                      <p className="font-medium text-green-900 dark:text-green-100">
+                        Upload completed successfully!
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Placeholder when no file selected */}
+            {!selectedFile && uploadState === 'idle' && (
+              <div className="flex items-center justify-center aspect-video bg-muted rounded-lg border-2 border-dashed">
+                <div className="text-center p-6">
+                  <FileVideo className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
+                  <p className="text-sm text-muted-foreground">
+                    Video preview will appear here
+                  </p>
                 </div>
               </div>
             )}
           </div>
-
-          {/* Upload Progress */}
-          {uploadState !== 'idle' && (
-            <div className="space-y-3 pt-2">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium">
-                    {uploadState === 'uploading' && 'Đang tải lên máy chủ...'}
-                    {uploadState === 'processing' && 'Tải lên hoàn tất'}
-                    {uploadState === 'completed' && 'Hoàn tất'}
-                  </span>
-                  <span className="text-muted-foreground">
-                    {uploadProgress}%
-                  </span>
-                </div>
-                <Progress value={uploadProgress} className="h-2" />
-              </div>
-
-              {uploadState === 'uploading' && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span>Uploading chunks... Please wait</span>
-                </div>
-              )}
-
-              {uploadState === 'processing' && (
-                <div className="flex items-start gap-2 p-3 bg-blue-50 dark:bg-blue-950 rounded-md">
-                  <CheckCircle2 className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
-                  <div className="flex-1 text-sm">
-                    <p className="font-medium text-blue-900 dark:text-blue-100">
-                      Hệ thống đang xử lý chuẩn hóa video
-                    </p>
-                    <p className="text-blue-700 dark:text-blue-300 mt-1">
-                      Quá trình này có thể mất vài phút. Bạn có thể rời khỏi trang này.
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
         </div>
 
         {/* Actions */}
@@ -346,8 +395,25 @@ export default function EpisodeUploadDialog({ open, onClose, animeSlug, animeNam
             onClick={handleUpload}
             disabled={!selectedFile || uploadState !== 'idle'}
           >
-            <Upload className="h-4 w-4 mr-2" />
-            Upload Episode
+            {uploadState === 'idle' && (
+              <>
+                <Upload className="h-4 w-4 mr-2" />
+                Upload Episode
+              </>
+            )}
+            {uploadState === 'uploading' && (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Uploading...
+              </>
+            )}
+            {uploadState === 'processing' && (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Processing...
+              </>
+            )}
+            {uploadState === 'completed' && 'Completed'}
           </Button>
         </div>
       </DialogContent>

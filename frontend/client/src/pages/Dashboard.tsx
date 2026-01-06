@@ -18,7 +18,7 @@ export default function Dashboard() {
     gcTime: 1000 * 60 * 10, // Giữ cache trong 10 phút
   });
 
-  // Hiển thị toast khi có lỗi
+  // Hiển thị toast khi có Error
   if (isError) {
     toast({
       title: "Error",

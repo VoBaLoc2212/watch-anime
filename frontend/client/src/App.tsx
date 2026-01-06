@@ -17,7 +17,7 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 1000 * 60,  // Cache trong 60 giây
-      retry: 1,              // Retry khi lỗi
+      retry: 1,              // Retry khi Error
       refetchOnWindowFocus: false, // Không fetch lại khi chuyển tab
     }
   }

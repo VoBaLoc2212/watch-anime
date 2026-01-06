@@ -142,7 +142,7 @@ namespace backend.Services
                     }
                     catch
                     {
-                        // Có thể log lỗi xóa nhưng không nên chặn quy trình upload
+                        // Có thể log Error xóa nhưng không nên chặn quy trình upload
                     }
                 }
             }
@@ -349,7 +349,7 @@ namespace backend.Services
                         Console.WriteLine($"[Drive Upload] {finalName}: Hoàn tất!");
                         break;
                     case UploadStatus.Failed:
-                        Console.WriteLine($"[Drive Upload] {finalName} Lỗi: {progress.Exception}");
+                        Console.WriteLine($"[Drive Upload] {finalName} Error: {progress.Exception}");
                         break;
                 }
             };
@@ -420,8 +420,8 @@ namespace backend.Services
             }
             catch (Exception ex)
             {
-                // Log lỗi tại đây nếu cần thiết
-                Console.WriteLine($"Lỗi đổi tên folder: {ex.Message}");
+                // Log Error tại đây nếu cần thiết
+                Console.WriteLine($"Error đổi tên folder: {ex.Message}");
                 return false;
             }
         }

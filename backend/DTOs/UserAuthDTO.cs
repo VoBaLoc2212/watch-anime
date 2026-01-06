@@ -37,4 +37,12 @@ namespace backend.DTOs
         public string PhoneNumber { get; set; }
         public IFormFile Avatar { get; set; }
     }
+
+    public class UserAuthChangePasswordDTO
+    {
+        [Required]
+        public string OldPassword { get; set; }
+        [Required]
+        public string NewPassword { get; set; }
+    }
 }

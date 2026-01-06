@@ -149,3 +149,41 @@ export async function UpdateUserProfileApi(formData: FormData) {
 
     return response.json() as Promise<UserInfo>;
 }
+
+/**
+ * Đổi mật khẩu
+ */
+interface ChangePasswordPayload {
+    oldPassword?: string;
+    newPassword: string;
+}
+
+export async function ChangePasswordApi(payload: ChangePasswordPayload) {
+    // Check token expiration first
+    if (!checkTokenAndLogout()) {
+        throw new Error('Session expired. Please login again.');
+    }
+    
+    const token = localStorage.getItem('token');
+    if (!token) {
+        throw new Error('No authentication token found');
+    }
+
+    const response = await fetch(`${API_URL}/api/account/change-password`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+        const errorText = await response.json();
+        throw new Error(errorText.message || 'Failed to change password');
+    }
+
+    const data = await response.json();
+
+    return data;
+}

@@ -1,17 +1,15 @@
-﻿# Stage 1: Build
+﻿# Build Stage
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
-WORKDIR /app
-
-# Copy csproj và restore dependencies
-COPY *.csproj ./
+WORKDIR /src
+COPY ["backend.csproj", "./"]
 RUN dotnet restore
+COPY . .
+RUN dotnet publish -c Release -o /app/publish
 
-# Copy toàn bộ code và build
-COPY . ./
-RUN dotnet publish -c Release -o out
-
-# Stage 2: Runtime (Chạy ứng dụng nhẹ hơn)
+# Run Stage
 FROM mcr.microsoft.com/dotnet/aspnet:8.0
 WORKDIR /app
-COPY --from=build /app/out .
-ENTRYPOINT ["dotnet", "api.dll"]
+COPY --from=build /app/publish .
+EXPOSE 8080
+ENV ASPNETCORE_URLS=http://+:8080
+ENTRYPOINT ["dotnet", "backend.dll"]

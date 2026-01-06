@@ -16,7 +16,7 @@ namespace backend.Extensions
                 // 1. Khi check quyền (Authorize), ưu tiên dùng JWT Token
                 options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
 
-                // 2. Khi gặp lỗi 401, ưu tiên trả về Header của JWT
+                // 2. Khi gặp Error 401, ưu tiên trả về Header của JWT
                 options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
 
                 // 3. QUAN TRỌNG: SỬA DÒNG NÀY
@@ -63,7 +63,7 @@ namespace backend.Extensions
                 opt.Scope.Add("email");
                 opt.SaveTokens = true;
 
-                // Sửa lại Correlation Cookie để tránh lỗi vòng lặp redirect
+                // Sửa lại Correlation Cookie để tránh Error vòng lặp redirect
                 opt.CorrelationCookie.SameSite = SameSiteMode.Lax;
                 opt.CorrelationCookie.SecurePolicy = CookieSecurePolicy.Always;
 

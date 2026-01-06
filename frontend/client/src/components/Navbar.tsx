@@ -12,11 +12,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useTokenFromUrl, useUserInfo } from "@/hooks/useTokenUrl";
+import { useState } from "react";
+import { ChangePasswordDialog } from "./ChangePasswordDialog";
 
 export function Navbar() {
   const [location] = useLocation();
   useTokenFromUrl();
   const { data: userInfo } = useUserInfo();
+  const [showChangePasswordDialog, setShowChangePasswordDialog] = useState(false);
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="flex h-16 items-center justify-between px-8 gap-4">
@@ -152,7 +155,10 @@ export function Navbar() {
                       Infomation
                     </DropdownMenuItem>
                   </Link>
-                  <DropdownMenuItem data-testid="menu-item-change-password">
+                  <DropdownMenuItem 
+                    data-testid="menu-item-change-password"
+                    onClick={() => setShowChangePasswordDialog(true)}
+                  >
                     <KeyRound className="mr-2 h-4 w-4" />
                     Change Password
                   </DropdownMenuItem>
@@ -178,6 +184,12 @@ export function Navbar() {
           })()}
         </div>
       </div>
+
+      {/* Change Password Dialog */}
+      <ChangePasswordDialog 
+        open={showChangePasswordDialog}
+        onOpenChange={setShowChangePasswordDialog}
+      />
     </header>
   );
 }
