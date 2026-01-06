@@ -16,6 +16,7 @@ namespace backend.Helpers
             CreateMap<UserAuthUpdateDTO, User>()
                 .BeforeMap<ValidateBeforeMapAction<UserAuthUpdateDTO, User>>();
 
+
             CreateMap<AnimeCreateDTO, Anime>()
                 .BeforeMap<ValidateBeforeMapAction<AnimeCreateDTO, Anime>>();
             CreateMap<AnimeUpdateDTO, Anime>()
@@ -38,6 +39,9 @@ namespace backend.Helpers
             var sourceProps = typeof(TSource).GetProperties(BindingFlags.Public | BindingFlags.Instance);
             var destProps = typeof(TDestination).GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.SetProperty);
 
+            // Lưu lại các property names có trong source DTO
+            var sourcePropertyNames = new HashSet<string>(sourceProps.Select(p => p.Name));
+
             foreach (var dprop in destProps)
             {
                 var sprop = sourceProps.FirstOrDefault(p => p.Name == dprop.Name && dprop.PropertyType.IsAssignableFrom(p.PropertyType));
@@ -48,11 +52,21 @@ namespace backend.Helpers
                 }
             }
 
-            // Validate the populated destination instance using the model's data annotations
+            // Validate chỉ những property có trong DTO
             var validationContext = new ValidationContext(destInstance);
-            bool isValid = Validator.TryValidateObject(destInstance, validationContext, validationResults, validateAllProperties: true);
+            foreach (var dprop in destProps.Where(p => sourcePropertyNames.Contains(p.Name)))
+            {
+                var value = dprop.GetValue(destInstance);
+                var propValidationResults = new List<ValidationResult>();
+                
+                Validator.TryValidateProperty(value, 
+                    new ValidationContext(destInstance) { MemberName = dprop.Name }, 
+                    propValidationResults);
+                
+                validationResults.AddRange(propValidationResults);
+            }
 
-            if (!isValid)
+            if (validationResults.Any())
             {
                 throw new ValidationException(
                     $"Validation failed for {typeof(TSource).Name}: " +

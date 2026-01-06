@@ -20,16 +20,17 @@ interface UserInfo {
     phoneNumber: string;
 }
 
-export async function GetUserInfoApi(email: string) {
-    const response = await fetch(`${API_URL}/api/account/user?email=${email}`, {
+export async function GetUserInfoApi() {
+    const response = await fetch(`${API_URL}/api/account/user`, {
         method: 'GET',
         headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
     });
     if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Failed to fetch user info: ${errorText}`);
+        const errorText = await response.json();
+        throw new Error(`Failed to fetch user info: ${errorText.message}`);
     }
     return response.json() as Promise<UserInfo>;
 }

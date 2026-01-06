@@ -19,12 +19,14 @@ namespace backend.Controllers
         private readonly IUnitOfWork _uow;
         private readonly IMapper _mapper;
         private readonly IGoogleDriveService _ggDrive;
+        private readonly IBlobAzureService _blobService;
 
-        public AnimeController(IUnitOfWork uow, IMapper mapper, IGoogleDriveService ggDrive)
+        public AnimeController(IUnitOfWork uow, IMapper mapper, IGoogleDriveService ggDrive, IBlobAzureService blobService)
         {
             _uow = uow;
             _mapper = mapper;
             _ggDrive = ggDrive;
+            _blobService = blobService;
         }
 
         [HttpGet("get-animes")]
@@ -97,9 +99,10 @@ namespace backend.Controllers
 
             anime.CreatedById = user.Id;
 
-            var thumbnailId = await _ggDrive.UploadImgAsync(animeDTO.Thumbnail, $"anime/{anime.AnimeName}/thumbnail", "thumbnail");
-
-            anime.ThumbnailUrl = $"https://drive.google.com/thumbnail?id={thumbnailId}&sz=w400";
+            // Upload thumbnail to Azure Blob: media/anime/{anime-name}/thumbnail/thumbnail.{ext}
+            var blobPath = $"anime/{anime.AnimeName}/thumbnail";
+            var thumbnailUrl = await _blobService.UploadImageAsync(animeDTO.Thumbnail, "media", blobPath, "thumbnail");
+            anime.ThumbnailUrl = thumbnailUrl;
 
             anime.Slug = StringUtils.GenerateSlug(animeDTO.AnimeName);
             if(await _uow.Animes.Any(a => a.Slug == anime.Slug))
@@ -133,12 +136,11 @@ namespace backend.Controllers
 
             if (animeUpdateDTO.Thumbnail != null)
             {
-                if(_ggDrive.RenameFolderAsync("anime", anime.AnimeName, animeUpdateDTO.AnimeName).Result == false)
-                {
-                    return BadRequest(new { message = "Failed to rename anime folder in Google Drive" });
-                }
-                var thumbnailId = await _ggDrive.UploadImgAsync(animeUpdateDTO.Thumbnail, $"anime/{anime.AnimeName}/thumbnail", "thumbnail");
-                anime.ThumbnailUrl = $"https://drive.google.com/thumbnail?id={thumbnailId}&sz=w400";
+                // Upload thumbnail to Azure Blob: media/anime/{anime-name}/thumbnail/thumbnail.{ext}
+                // Tự động xóa thumbnail cũ trước khi upload mới
+                var blobPath = $"anime/{animeUpdateDTO.AnimeName}/thumbnail";
+                var thumbnailUrl = await _blobService.UploadImageAsync(animeUpdateDTO.Thumbnail, "media", blobPath, "thumbnail");
+                anime.ThumbnailUrl = thumbnailUrl;
             }
 
             if(!StringUtils.GenerateSlug(animeUpdateDTO.AnimeName).Equals(AnimeSlug))

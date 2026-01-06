@@ -21,27 +21,29 @@ namespace backend.Controllers
         private readonly IAuthService _authService;
         private readonly IConfiguration _configuration;
         private readonly IGoogleDriveService _ggService;
+        private readonly IBlobAzureService _blobService;
 
-        public AccountController(IUnitOfWork unitOfWork, ITokenService tokenService, IMapper mapper, IPasswordHasherService hasherPasswordService, IAuthService authService, IConfiguration configuration, IGoogleDriveService ggService)
+        public AccountController(IUnitOfWork unitOfWork, ITokenService tokenService, IMapper mapper, IPasswordHasherService hasherPasswordService, IAuthService authService, IConfiguration configuration, IGoogleDriveService ggService, IBlobAzureService blobService)
         {
             _unitOfWork = unitOfWork;
             _tokenService = tokenService;
             _mapper = mapper;
             _hasherPasswordService = hasherPasswordService;
+            _blobService = blobService;
             _authService = authService;
             _configuration = configuration;
             _ggService = ggService;
         }
 
+        [Authorize(Policy = "MemberSection")]
         [HttpGet("user")]
-        public async Task<ActionResult<UserAuthGetUserInformation>> GetUser([FromQuery] string email)
+        public async Task<ActionResult<UserAuthGetUserInformation>> GetUser()
         {
-            var existedUser = await _unitOfWork.Accounts.GetUserByEmail(email);
-            if (existedUser == null) return BadRequest("Email Not Found");
+            var existedUser = await _unitOfWork.Accounts.GetUserByEmail(User.GetEmail());
+            if (existedUser == null) return BadRequest(new {message = "Email Not Found" });
 
             return Ok(new UserAuthGetUserInformation
             {
-                Token = await _tokenService.CreateToken(existedUser),
                 Email = existedUser.Email,
                 FullName = $"{existedUser.FirstName} {existedUser.LastName}",
                 PhotoUrl = existedUser.PhotoUrl,
@@ -129,20 +131,20 @@ namespace backend.Controllers
             return Redirect($"{frontendUrl}/dashboard?token={mySystemToken}");
         }
 
+        [Authorize(Policy = "MemberSection")]
         [HttpPut("update-user")]
         public async Task<ActionResult<UserAuthGetUserInformation>> UpdateUser([FromForm] UserAuthUpdateDTO updateDto)
         {
-            var user = await _unitOfWork.Accounts.GetUserByEmail(updateDto.Email);
-            if (user == null)
-                return BadRequest(new {message = "User not found" });
-            var userUpdated = _mapper.Map<UserAuthUpdateDTO, Models.User>(updateDto, user);
+            var user =  await _unitOfWork.Accounts.GetUserByEmail(User.GetEmail());
+            var userUpdated = _mapper.Map(updateDto, user);
 
             if (updateDto.Avatar != null)
             {
-                // Handle file upload logic here
-                // For example, save the file and get the URL
-                var photoId = await _ggService.UploadImgAsync(updateDto.Avatar,$"user/{user.FirstName + " " + user.LastName}/avatar","avatar");
-                userUpdated.PhotoUrl = $"https://drive.google.com/thumbnail?id={photoId}&sz=w400";
+                // Upload avatar to Azure Blob: media/user/{fullName-guid}/avatar/avatar.{ext}
+                var fullName = $"{user.FirstName}-{user.LastName}-{user.Id}";
+                var blobPath = $"user/{fullName}/avatar";
+                var avatarUrl = await _blobService.UploadImageAsync(updateDto.Avatar, "media", blobPath, "avatar");
+                userUpdated.PhotoUrl = avatarUrl;
             }
             _unitOfWork.Accounts.Update(user);
 
