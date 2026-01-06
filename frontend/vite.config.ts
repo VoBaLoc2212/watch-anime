@@ -36,6 +36,9 @@ export default defineConfig(async ({ command, mode }) => {
         "@assets": path.resolve(import.meta.dirname, "assets"),
       },
     },
+    optimizeDeps: {
+    exclude: ['@ffmpeg/ffmpeg', '@ffmpeg/util'],
+  },
     root: path.resolve(import.meta.dirname, "client"),
     build: {
       outDir: path.resolve(import.meta.dirname, "dist/public"),

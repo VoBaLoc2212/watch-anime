@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Upload, FileVideo, CheckCircle2, Loader2, X } from "lucide-react";
 import { GetSASTokenForEpisodeUploadApi, CreateEpisodeApi } from "@/api/EpisodeAPI";
 import { BlockBlobClient } from "@azure/storage-blob";
+import { fetchFile } from '@ffmpeg/util';
+import { useFFmpeg } from '@/contexts/FFmpegContext';
 
 interface EpisodeUploadDialogProps {
   open: boolean;
@@ -24,20 +26,26 @@ export default function EpisodeUploadDialog({ open, onClose, animeSlug, animeNam
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoPreviewRef = useRef<HTMLVideoElement>(null);
   
+  // Sử dụng FFmpeg từ context (đã được pre-load)
+  const { ffmpeg, isLoaded: ffmpegLoaded, isLoading: isLoadingFFmpeg } = useFFmpeg();
+  
   const [episodeNumber, setEpisodeNumber] = useState<string>("");
   const [episodeName, setEpisodeName] = useState<string>("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [videoPreviewUrl, setVideoPreviewUrl] = useState<string>("");
   const [videoDuration, setVideoDuration] = useState<number>(0);
   const [uploadState, setUploadState] = useState<UploadState>('idle');
+  
   const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const [compressProgress, setCompressProgress] = useState<number>(0);
+  const [isCompressing, setIsCompressing] = useState<boolean>(false);
+  const [overallProgress, setOverallProgress] = useState<number>(0);
+  const [currentStep, setCurrentStep] = useState<string>('');
 
-  // Convert seconds to TimeOnly format (HH:mm:ss)
   const formatDurationForBackend = (seconds: number): string => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     const secs = Math.floor(seconds % 60);
-    
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
@@ -45,32 +53,20 @@ export default function EpisodeUploadDialog({ open, onClose, animeSlug, animeNam
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate file type
     if (!file.type.startsWith("video/")) {
-      toast({
-        title: "Invalid file type",
-        description: "Please select a video file",
-        variant: "destructive",
-      });
+      toast({ title: "Lỗi định dạng", description: "Vui lòng chọn file video", variant: "destructive" });
       return;
     }
 
-    // Validate file size (max 5GB for example)
-    const maxSize = 5 * 1024 * 1024 * 1024; // 5GB
-    if (file.size > maxSize) {
-      toast({
-        title: "File too large",
-        description: "Video file must be less than 5GB",
-        variant: "destructive",
-      });
+    // Giới hạn 2GB để tránh crash trình duyệt (v0.11 chịu tải kém hơn v0.12 một chút)
+    if (file.size > 2 * 1024 * 1024 * 1024) {
+      toast({ title: "File quá lớn", description: "Vui lòng chọn file dưới 2GB", variant: "destructive" });
       return;
     }
 
-    // Create preview URL
     const previewUrl = URL.createObjectURL(file);
     setVideoPreviewUrl(previewUrl);
 
-    // Extract video duration
     const video = document.createElement('video');
     video.preload = 'metadata';
     video.onloadedmetadata = () => {
@@ -78,34 +74,85 @@ export default function EpisodeUploadDialog({ open, onClose, animeSlug, animeNam
       setVideoDuration(Math.round(video.duration));
     };
     video.src = previewUrl;
-
     setSelectedFile(file);
   };
 
+  const smartProcessVideo = async (file: File): Promise<File> => {
+    if (!ffmpeg) {
+      toast({
+        title: "Lỗi",
+        description: "FFmpeg chưa sẵn sàng",
+        variant: "destructive",
+      });
+      return file;
+    }
+
+    // Nếu file > 1.5GB, bỏ qua xử lý để an toàn
+    if (file.size > 1.5 * 1024 * 1024 * 1024) {
+        toast({
+            title: "File lớn",
+            description: "Sẽ upload file gốc để tránh lỗi bộ nhớ.",
+            variant: "default",
+        });
+        return file;
+    }
+
+    setIsCompressing(true);
+    setCurrentStep('Đang tối ưu Video & Audio...');
+    setCompressProgress(0);
+
+    try {
+        const inputName = 'input.mp4';
+        const outputName = 'output.mp4';
+
+        // 1. Ghi file vào bộ nhớ ảo (API v0.12.x)
+        await ffmpeg.writeFile(inputName, await fetchFile(file));
+
+        // 2. Chạy lệnh (API v0.12.x dùng .exec)
+        // Copy video, Convert Audio AAC, Faststart
+        await ffmpeg.exec([
+            '-i', inputName,
+            '-c:v', 'copy',
+            '-c:a', 'aac',
+            '-b:a', '192k',
+            '-movflags', '+faststart',
+            outputName
+        ]);
+
+        // 3. Đọc file ra (API v0.12.x)
+        const data = await ffmpeg.readFile(outputName) as Uint8Array;
+
+        // 4. Dọn dẹp (API v0.12.x)
+        await ffmpeg.deleteFile(inputName);
+        await ffmpeg.deleteFile(outputName);
+
+        const processedBlob = new Blob([data.buffer as BlobPart], { type: 'video/mp4' });
+        const processedFile = new File([processedBlob], file.name, { type: 'video/mp4' });
+
+        setIsCompressing(false);
+        setCompressProgress(100);
+        return processedFile;
+
+    } catch (error) {
+        console.error("Lỗi xử lý video:", error);
+        setIsCompressing(false);
+        toast({
+            title: "Lỗi xử lý",
+            description: "Chuyển sang upload file gốc...",
+            variant: "destructive"
+        });
+        return file;
+    }
+  };
+
   const handleUpload = async () => {
-    if (!selectedFile) {
-      toast({
-        title: "No file selected",
-        description: "Please select a video file to upload",
-        variant: "destructive",
-      });
-      return;
-    }
+    if (!selectedFile || !episodeNumber || !episodeName) return;
 
-    if (!episodeNumber || parseInt(episodeNumber) <= 0) {
+    if (!ffmpegLoaded) {
       toast({
-        title: "Invalid episode number",
-        description: "Please enter a valid episode number",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!episodeName.trim()) {
-      toast({
-        title: "Missing episode name",
-        description: "Please enter an episode name",
-        variant: "destructive",
+        title: "Đang tải FFmpeg...",
+        description: "Vui lòng đợi FFmpeg tải xong (đang tải ở background)",
+        variant: "default",
       });
       return;
     }
@@ -113,110 +160,87 @@ export default function EpisodeUploadDialog({ open, onClose, animeSlug, animeNam
     try {
       setUploadState('uploading');
       setUploadProgress(0);
+      setOverallProgress(0);
 
-      // Step 1: Get SAS Token from backend
-      const { uploadUrl, fileName } = await GetSASTokenForEpisodeUploadApi(selectedFile.name,animeName, episodeNumber);
+      // Step 1: Process video (FFmpeg đã được pre-load)
+      setCurrentStep('Đang xử lý video...');
+      const processedFile = await smartProcessVideo(selectedFile);
 
-      // Step 2: Upload directly to Azure Blob with progress tracking
+      // Step 2: Get Token
+      setCurrentStep('Đang lấy token upload...');
+      setOverallProgress(40);
+      const { uploadUrl, fileName } = await GetSASTokenForEpisodeUploadApi(
+        processedFile.name,
+        animeName,
+        episodeNumber
+      );
+
+      // Step 3: Upload
+      setCurrentStep('Đang tải lên Azure...');
       const blockBlobClient = new BlockBlobClient(uploadUrl);
-      
-      await blockBlobClient.uploadData(selectedFile, {
+      await blockBlobClient.uploadData(processedFile, {
         onProgress: (progress) => {
-          const percent = Math.round((progress.loadedBytes / selectedFile.size) * 100);
+          const percent = Math.round((progress.loadedBytes / processedFile.size) * 100);
           setUploadProgress(percent);
+          setOverallProgress(40 + Math.round(percent * 0.5));
         },
-        blobHTTPHeaders: {
-          blobContentType: selectedFile.type
-        }
+        blobHTTPHeaders: { blobContentType: 'video/mp4' }
       });
 
-      // Step 3: Create episode metadata in database
+      // Step 5: Metadata
       setUploadState('processing');
+      setCurrentStep('Đang lưu thông tin...');
       await CreateEpisodeApi({
         animeSlug,
         episodeNumber: parseInt(episodeNumber),
-        episodeName: episodeName.trim(),
-        videoFileName: episodeNumber,
+        episodeName,
+        videoFileName: fileName,
         duration: formatDurationForBackend(videoDuration)
       });
 
       setUploadState('completed');
-      
-      toast({
-        title: "Upload completed",
-        description: "Episode uploaded successfully",
-      });
+      setOverallProgress(100);
+      setCurrentStep('Hoàn tất!');
+      toast({ title: "Thành công", description: "Đã upload tập phim mới!" });
 
-      // Wait a bit before closing
       setTimeout(() => {
         resetDialog();
         onClose();
-        if (onUploadSuccess) {
-          onUploadSuccess();
-        }
+        onUploadSuccess?.();
       }, 1500);
 
-    } catch (error) {
-      console.error("Upload error:", error);
-      
-      const errorMessage = error instanceof Error ? error.message : "Failed to upload video";
-      
-      toast({
-        title: "Upload failed",
-        description: errorMessage,
-        variant: "destructive",
-      });
-      
+    } catch (error: any) {
+      console.error(error);
       setUploadState('idle');
-      setUploadProgress(0);
+      toast({ title: "Thất bại", description: error.message || "Lỗi upload", variant: "destructive" });
     }
   };
 
   const resetDialog = () => {
-    if (videoPreviewUrl) {
-      URL.revokeObjectURL(videoPreviewUrl);
-    }
+    if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl);
     setSelectedFile(null);
     setVideoPreviewUrl("");
     setEpisodeNumber("");
     setEpisodeName("");
-    setVideoDuration(0);
-    setUploadProgress(0);
     setUploadState('idle');
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
+    setOverallProgress(0);
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
-
+  
   const handleClose = () => {
-    if (uploadState === 'uploading' || uploadState === 'processing') {
-      const confirmClose = window.confirm(
-        "Upload is in progress. Are you sure you want to close? This will cancel the upload."
-      );
-      if (!confirmClose) return;
+    if (uploadState !== 'idle') {
+        if (!window.confirm("Đang upload, bạn có chắc muốn hủy?")) return;
     }
-    
     resetDialog();
     onClose();
   };
 
-  const formatFileSize = (bytes: number): string => {
+  const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
-  };
-
-  const removeSelectedFile = () => {
-    if (videoPreviewUrl) {
-      URL.revokeObjectURL(videoPreviewUrl);
-    }
-    setSelectedFile(null);
-    setVideoPreviewUrl("");
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
   return (
@@ -224,197 +248,72 @@ export default function EpisodeUploadDialog({ open, onClose, animeSlug, animeNam
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Upload Episode</DialogTitle>
-          <DialogDescription>
-            Add a new episode for {animeName}
-          </DialogDescription>
+          <DialogDescription>Add a new episode for {animeName}</DialogDescription>
         </DialogHeader>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
-          {/* Left Side - Episode Info */}
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="episode-number">Episode Number *</Label>
-              <Input
-                id="episode-number"
-                type="number"
-                min="1"
-                placeholder="1"
-                value={episodeNumber}
-                onChange={(e) => setEpisodeNumber(e.target.value)}
-                disabled={uploadState !== 'idle'}
-              />
+              <Label>Episode Number *</Label>
+              <Input type="number" value={episodeNumber} onChange={(e) => setEpisodeNumber(e.target.value)} disabled={uploadState !== 'idle'} />
             </div>
-
             <div className="space-y-2">
-              <Label htmlFor="episode-name">Episode Name *</Label>
-              <Input
-                id="episode-name"
-                type="text"
-                placeholder="Enter episode name"
-                value={episodeName}
-                onChange={(e) => setEpisodeName(e.target.value)}
-                disabled={uploadState !== 'idle'}
-              />
+              <Label>Episode Name *</Label>
+              <Input value={episodeName} onChange={(e) => setEpisodeName(e.target.value)} disabled={uploadState !== 'idle'} />
             </div>
-
             <div className="space-y-2">
-              <Label htmlFor="video-file">Video File *</Label>
-              <div className="flex items-center gap-2">
-                <input
-                  ref={fileInputRef}
-                  id="video-file"
-                  type="file"
-                  accept="video/*"
-                  onChange={handleFileSelect}
-                  className="hidden"
-                  disabled={uploadState !== 'idle'}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploadState !== 'idle'}
-                >
-                  <Upload className="h-4 w-4 mr-2" />
-                  {selectedFile ? "Change Video" : "Select Video"}
+              <Label>Video File *</Label>
+              <div className="flex gap-2">
+                <input ref={fileInputRef} type="file" accept="video/*" className="hidden" onChange={handleFileSelect} disabled={uploadState !== 'idle'} />
+                <Button variant="outline" className="w-full" onClick={() => fileInputRef.current?.click()} disabled={uploadState !== 'idle'}>
+                  <Upload className="h-4 w-4 mr-2" /> {selectedFile ? "Change Video" : "Select Video"}
                 </Button>
               </div>
               {selectedFile && (
                 <div className="flex items-center gap-2 p-3 bg-muted rounded-md">
-                  <FileVideo className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{selectedFile.name}</p>
-                    <p className="text-xs text-muted-foreground">{formatFileSize(selectedFile.size)}</p>
-                  </div>
-                  {uploadState === 'idle' && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={removeSelectedFile}
-                      className="flex-shrink-0"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  )}
+                  <FileVideo className="h-5 w-5" />
+                  <div className="flex-1 truncate text-sm">{selectedFile.name} ({formatFileSize(selectedFile.size)})</div>
                 </div>
               )}
             </div>
           </div>
 
-          {/* Right Side - Video Preview & Progress */}
           <div className="space-y-4">
-            {/* Video Preview */}
             {selectedFile && videoPreviewUrl && (
+              <div className="aspect-video bg-black rounded-lg overflow-hidden">
+                <video src={videoPreviewUrl} controls className="w-full h-full object-contain" />
+              </div>
+            )}
+
+            {/* Hiển thị trạng thái FFmpeg khi chưa load xong */}
+            {isLoadingFFmpeg && (
               <div className="space-y-2">
-                <Label>Video Preview</Label>
-                <div className="relative aspect-video bg-black rounded-lg overflow-hidden">
-                  <video
-                    ref={videoPreviewRef}
-                    src={videoPreviewUrl}
-                    controls
-                    className="w-full h-full object-contain"
-                  />
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Đang tải FFmpeg... (chỉ lần đầu)</span>
                 </div>
+                <Progress value={overallProgress} />
               </div>
             )}
 
-            {/* Upload Progress */}
             {uploadState !== 'idle' && (
-              <div className="space-y-3">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="font-medium">
-                      {uploadState === 'uploading' && 'Đang tải lên...'}
-                      {uploadState === 'processing' && 'Đang xử lý...'}
-                      {uploadState === 'completed' && 'Hoàn tất!'}
-                    </span>
-                    <span className="text-muted-foreground font-mono">
-                      {uploadProgress}%
-                    </span>
-                  </div>
-                  <Progress value={uploadProgress} className="h-3" />
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span>{currentStep}</span>
+                  <span>{overallProgress}%</span>
                 </div>
-
-                {uploadState === 'uploading' && (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>Uploading to Azure Blob Storage...</span>
-                  </div>
-                )}
-
-                {uploadState === 'processing' && (
-                  <div className="flex items-start gap-2 p-3 bg-blue-50 dark:bg-blue-950 rounded-md">
-                    <Loader2 className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5 animate-spin" />
-                    <div className="flex-1 text-sm">
-                      <p className="font-medium text-blue-900 dark:text-blue-100">
-                        Creating episode metadata...
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {uploadState === 'completed' && (
-                  <div className="flex items-start gap-2 p-3 bg-green-50 dark:bg-green-950 rounded-md">
-                    <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
-                    <div className="flex-1 text-sm">
-                      <p className="font-medium text-green-900 dark:text-green-100">
-                        Upload completed successfully!
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Placeholder when no file selected */}
-            {!selectedFile && uploadState === 'idle' && (
-              <div className="flex items-center justify-center aspect-video bg-muted rounded-lg border-2 border-dashed">
-                <div className="text-center p-6">
-                  <FileVideo className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
-                  <p className="text-sm text-muted-foreground">
-                    Video preview will appear here
-                  </p>
-                </div>
+                <Progress value={overallProgress} />
+                {isCompressing && <p className="text-xs text-orange-500 animate-pulse">Đang fix lỗi âm thanh (Audio AC3 → AAC)...</p>}
               </div>
             )}
           </div>
         </div>
 
-        {/* Actions */}
-        <div className="flex justify-end gap-2 pt-4 border-t">
-          <Button
-            variant="outline"
-            onClick={handleClose}
-            disabled={uploadState === 'uploading' || uploadState === 'processing'}
-          >
-            {uploadState === 'idle' ? 'Cancel' : 'Close'}
-          </Button>
-          <Button
-            onClick={handleUpload}
-            disabled={!selectedFile || uploadState !== 'idle'}
-          >
-            {uploadState === 'idle' && (
-              <>
-                <Upload className="h-4 w-4 mr-2" />
-                Upload Episode
-              </>
-            )}
-            {uploadState === 'uploading' && (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Uploading...
-              </>
-            )}
-            {uploadState === 'processing' && (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Processing...
-              </>
-            )}
-            {uploadState === 'completed' && 'Completed'}
-          </Button>
+        <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={handleClose} disabled={uploadState !== 'idle'}>Close</Button>
+            <Button onClick={handleUpload} disabled={!selectedFile || uploadState !== 'idle' || isLoadingFFmpeg}>
+                {uploadState === 'idle' ? (isLoadingFFmpeg ? 'Đang tải FFmpeg...' : 'Upload') : <Loader2 className="animate-spin" />}
+            </Button>
         </div>
       </DialogContent>
     </Dialog>

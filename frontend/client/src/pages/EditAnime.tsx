@@ -15,7 +15,7 @@ import { GetAnimeDetailApi, UpdateAnimeApi } from "@/api/AnimeAPI";
 import { GetEpisodesApi } from "@/api/EpisodeAPI";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import ImageCropDialog from "@/components/ImageCropDialog";
-import EpisodeUploadDialog from "@/components/EpisodeUploadDialog";
+import ChunkedVideoUploadDialog from "@/components/ChunkedVideoUploadDialog";
 
 const animeEditSchema = z.object({
   animeName: z.string().min(1, "Anime name is required"),
@@ -583,8 +583,8 @@ export default function EditAnime() {
         onClose={() => setShowCropDialog(false)}
       />
 
-      {/* Episode Upload Dialog */}
-      <EpisodeUploadDialog
+      {/* Episode Upload Dialog - Production HLS Chunked Upload */}
+      <ChunkedVideoUploadDialog
         open={showEpisodeUpload}
         onClose={() => setShowEpisodeUpload(false)}
         animeSlug={animeName || ""}

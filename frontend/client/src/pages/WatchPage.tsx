@@ -122,6 +122,10 @@ export default function WatchPage() {
   const videoUrl = currentEpisodeData?.videoUrl || "";
   const duration = currentEpisodeData?.duration || "00:00:00";
 
+  // Debug log
+  console.log("Current episode data:", currentEpisodeData);
+  console.log("Video URL:", videoUrl);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">

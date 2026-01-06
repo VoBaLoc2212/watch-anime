@@ -17,19 +17,15 @@ namespace backend.Controllers
     {
         private readonly IUnitOfWork _uow;
         private readonly IGoogleDriveService _ggDrive;
-        private readonly IWebHostEnvironment _environment;
-        private readonly IVideoService _videoService;
-        private readonly IServiceScopeFactory _scopeFactory;
         private readonly IBlobAzureService _blobService;
+        private readonly IMapper _mapper;
 
-        public EpisodeController(IUnitOfWork uow, IGoogleDriveService ggDrive, IWebHostEnvironment environment, IVideoService videoService, IServiceScopeFactory scopeFactory, IBlobAzureService blobService)
+        public EpisodeController(IUnitOfWork uow, IGoogleDriveService ggDrive, IBlobAzureService blobService, IMapper mapper)
         {
             _uow = uow;
             _ggDrive = ggDrive;
-            _environment = environment;
-            _videoService = videoService;
-            _scopeFactory = scopeFactory;
             _blobService = blobService;
+            _mapper = mapper;
         }
 
         [HttpGet("get-animeepisodes")]
@@ -50,7 +46,7 @@ namespace backend.Controllers
                 EpisodeName = episode.EpisodeName,
                 EpisodeNumber = episode.EpisodeNumber,
                 Duration = episode.Duration, // Convert TimeOnly to string
-                VideoUrl = _ggDrive.GetCloudflareWorkerUrl + episode.VideoUrl
+                VideoUrl = episode.VideoUrl
             }).ToImmutableList();
             return Ok(episodeDTOs);
         }
@@ -107,14 +103,7 @@ namespace backend.Controllers
             {
                 return NotFound(new { message = "Anime not found" });
             }
-            var newEpisode = new Episode
-            {
-                EpisodeName = episodeDTO.EpisodeName,
-                EpisodeNumber = episodeDTO.EpisodeNumber,
-                Duration = episodeDTO.Duration,
-                VideoUrl = episodeDTO.VideoFileName, // Lưu tên file (blobName) chứ không phải URL đầy đủ
-                AnimeId = anime.Id
-            };
+            var newEpisode = _mapper.Map<Episode>(episodeDTO);
             anime.Episodes.Add(newEpisode);
             _uow.Animes.Update(anime);
             if (await _uow.Complete())

@@ -14,7 +14,7 @@ namespace backend.Models
         [Required]
         public string VideoUrl { get; set; }
         public DateTime UploadDate { get; set; } = DateTime.UtcNow;
-        public DateTime DeletedAt { get; set; } = DateTime.UtcNow;
+        public DateTime DeletedAt { get; set; }
 
         public Anime Anime { get; set; }
         public Guid AnimeId { get; set; }

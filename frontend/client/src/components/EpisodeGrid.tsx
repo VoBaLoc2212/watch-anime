@@ -29,8 +29,18 @@ const extractDriveFileId = (videoUrl?: string) => {
 };
 
 const getThumbnailForEpisode = (videoUrl?: string) => {
+  if (!videoUrl) return undefined;
+  
+  // Check if it's Azure Blob Storage URL
+  if (videoUrl.includes('blob.core.windows.net')) {
+    // For Azure Blob, use the video itself as thumbnail
+    // Browser will show first frame of video
+    return videoUrl;
+  }
+  
+  // Google Drive fallback
   const id = extractDriveFileId(videoUrl);
-  if (!id) return undefined;
+  if (!id) return videoUrl; // Return original URL as fallback
   return `https://drive.google.com/thumbnail?id=${id}`;
 };
 
@@ -63,11 +73,21 @@ export function EpisodeGrid({ episodes, currentEpisode, onEpisodeSelect }: Episo
                   <span className="w-8 flex-shrink-0 text-center text-base text-muted-foreground">
                     {ep.episodeNumber}
                   </span>
-                  <img
-                    src={thumbnailUrl}
-                    alt={`Thumbnail for Episode ${ep.episodeNumber}`}
-                    className="h-14 w-24 flex-shrink-0 rounded-md bg-muted object-cover"
-                  />
+                  {thumbnailUrl?.includes('blob.core.windows.net') ? (
+                    <video
+                      src={thumbnailUrl}
+                      className="h-14 w-24 flex-shrink-0 rounded-md bg-muted object-cover"
+                      muted
+                      playsInline
+                      preload="metadata"
+                    />
+                  ) : (
+                    <img
+                      src={thumbnailUrl}
+                      alt={`Thumbnail for Episode ${ep.episodeNumber}`}
+                      className="h-14 w-24 flex-shrink-0 rounded-md bg-muted object-cover"
+                    />
+                  )}
                   <div className="flex-1 overflow-hidden">
                     <p className="truncate text-sm">
                       {/* API có thể không cung cấp tiêu đề, nên sẽ fallback về tên mặc định */}

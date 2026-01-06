@@ -17,8 +17,9 @@ import { GetAnimeListApi } from "@/api/AnimeAPI";
 import { Anime } from "@/models/AnimeModel";
 import { useQuery } from "@tanstack/react-query";
 import { slugify } from "@/utils/slugify";
+import { FFmpegProvider } from "@/contexts/FFmpegContext";
 
-export default function ManageAnime() {
+function ManageAnimeContent() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedGenre, setSelectedGenre] = useState<string>("all");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
@@ -268,5 +269,13 @@ export default function ManageAnime() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function ManageAnime() {
+  return (
+    <FFmpegProvider autoLoad={true}>
+      <ManageAnimeContent />
+    </FFmpegProvider>
   );
 }

@@ -140,6 +140,29 @@ export function VideoPlayer({
     };
   }, [showControls, playing]);
 
+  // Effect to control video playback when playing state changes
+  useEffect(() => {
+    const player = playerRef.current;
+    if (!player) return;
+
+    if (playing) {
+      player.play().catch(err => {
+        console.error("Play error:", err);
+        setState(prev => ({ ...prev, playing: false }));
+      });
+    } else {
+      player.pause();
+    }
+  }, [playing]);
+
+  // Effect to control volume
+  useEffect(() => {
+    const player = playerRef.current;
+    if (!player) return;
+    player.volume = volume;
+    player.muted = muted;
+  }, [volume, muted]);
+
   // --- HANDLERS (Logic từ Official Demo) ---
 
   const handleMouseMove = () => {
@@ -317,42 +340,32 @@ export function VideoPlayer({
       data-testid="video-player"
     >
       {videoUrl ? (
-        <ReactPlayer
-          ref={setPlayerRef}
-          className="react-player"
-          width="100%"
-          height="100%"
-          src={videoUrl}
-          playing={playing}
-          volume={volume}
-          muted={muted}
-          onReady={handleVideoReady}
-          
-          onWaiting={handleWaiting}
-          onPlaying={handlePlaying}
-          onStart={handleStart}
-          onPlay={handlePlay}
-          onPause={handlePause}
-          onEnded={handleEnded}
-          onError={(e: any) => {
-            console.error("Video playback error:", e);
-            
-            // 1. Tắt loading để không bị quay mãi
-            setIsLoadingVideo(false);
-            
-            // 2. QUAN TRỌNG: Chuyển playing về false
-            // Để nút Play to giữa màn hình hiện ra lại -> User bấm vào đó sẽ hết Error
-            setState(prev => ({ ...prev, playing: false }));
-        }}
-          onTimeUpdate={handleTimeUpdate}
-          onProgress={handleProgress}
-          onDurationChange={handleDurationChange}
-
-          crossOrigin ="anonymous"
-          
-          
-
-        />
+        <>
+          {/* Native HTML5 Video for Azure Blob */}
+          <video
+            ref={setPlayerRef}
+            className="w-full h-full object-contain"
+            src={videoUrl}
+            controls={false}
+            playsInline
+            crossOrigin="anonymous"
+            onLoadedMetadata={handleDurationChange}
+            onTimeUpdate={handleTimeUpdate}
+            onProgress={handleProgress}
+            onWaiting={handleWaiting}
+            onPlaying={handlePlaying}
+            onCanPlay={handleVideoReady}
+            onPlay={handlePlay}
+            onPause={handlePause}
+            onEnded={handleEnded}
+            onError={(e: any) => {
+              console.error("Video playback error:", e);
+              console.error("Video URL:", videoUrl);
+              setIsLoadingVideo(false);
+              setState(prev => ({ ...prev, playing: false }));
+            }}
+          />
+        </>
       ) : (
         <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-primary/20 to-purple-900/40">
           <div className="text-center text-white">

@@ -16,7 +16,7 @@ namespace backend.DTOs
     public class EpisodeUploadDTO : EpisodeDTO
     {
         public string AnimeSlug { get; set; }
-        public string VideoFileName { get; set; }
+        public string VideoUrl { get; set; }
     }
 
     public class EpisodeGetDTO : EpisodeDTO

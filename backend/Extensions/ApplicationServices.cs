@@ -29,6 +29,8 @@ namespace backend.Extensions
                 options.MinimumSameSitePolicy = SameSiteMode.Lax;
                 options.Secure = CookieSecurePolicy.Always;
             });
+            services.Configure<BlobAzureSetting>(config.GetSection("BlobAzure"));
+
 
             services.AddScoped<IGoogleDriveService, GoogleDriveService>();
             services.AddScoped<ITokenService, TokenService>();
@@ -37,6 +39,7 @@ namespace backend.Extensions
             services.AddScoped<IAuthService, AuthService>();
             services.AddScoped<IVideoService, VideoService>();
             services.AddScoped<IBlobAzureService, BlobAzureService>();
+            services.AddScoped<IHLSConversionService, HLSConversionService>();
 
             services.AddScoped<IUnitOfWork, UnitOfWork>();
             services.AddAutoMapper(cfg => { }, AppDomain.CurrentDomain.GetAssemblies());
