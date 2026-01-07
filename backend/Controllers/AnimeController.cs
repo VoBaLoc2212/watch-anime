@@ -116,6 +116,24 @@ namespace backend.Controllers
             {
                 return BadRequest(new {message = "Failed to add anime" });
             }
+
+            // Send notification to all regular users about new anime
+            var regularUsers = await _uow.Accounts.GetRegularUsersAsync();
+            foreach (var regularUser in regularUsers)
+            {
+                var notification = new Models.Notification
+                {
+                    UserId = regularUser.Id,
+                    Title = "New Anime Released!",
+                    Message = $"Check out the new anime: {anime.AnimeName}",
+                    Type = "info",
+                    Link = $"watch?animeName={anime.Slug}",
+                    IsRead = false
+                };
+                _uow.Notifications.Add(notification);
+            }
+            await _uow.Complete();
+
             return Ok(new { message = "Anime added successfully" });
         }
 

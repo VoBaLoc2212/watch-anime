@@ -1,6 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { SearchBar } from "./SearchBar";
 import { ThemeToggle } from "./ThemeToggle";
+import NotificationBell from "./NotificationBell";
 import { Tv, User, KeyRound, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -96,7 +97,9 @@ export function Navbar() {
             };
 
             return (
-              <DropdownMenu>
+              <>
+                <NotificationBell />
+                <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <div className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity">
                     {photoUrl ? (
@@ -180,6 +183,7 @@ export function Navbar() {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+              </>
             );
           })()}
         </div>

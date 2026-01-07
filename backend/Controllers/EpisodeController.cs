@@ -34,7 +34,7 @@ namespace backend.Controllers
             var anime = await _uow.Animes.GetAnimeByNameSlug(animeName);
             if (anime == null)
             {
-                return NotFound("Anime not found");
+                return Ok(new List<EpisodeGetDTO>());
             }
             var animeEpisodes = await _uow.Episodes.GetAnimeEpisodesAsync(anime.Id);
             if (!animeEpisodes.Any())

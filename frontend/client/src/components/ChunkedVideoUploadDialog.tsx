@@ -187,18 +187,18 @@ export default function ChunkedVideoUploadDialog({
 
       // Step 3: Complete upload and trigger HLS conversion
       setUploadStage('processing');
-      setStatusMessage('Converting to HLS format... This may take several minutes');
+      setStatusMessage('Processing video on server... This may take several minutes. You will receive a notification when completed.');
       setUploadProgress(75);
 
       const completeResponse = await CompleteChunkedUploadApi(sessionUploadId, formatDuration(videoDuration));
 
       setUploadProgress(100);
       setUploadStage('completed');
-      setStatusMessage('Upload and conversion completed!');
+      setStatusMessage('Upload completed! Video is being processed. Check notifications for updates.');
 
       toast({
-        title: 'Success!',
-        description: `Episode ${episodeNumber} uploaded successfully`,
+        title: 'Upload Completed',
+        description: 'Video is being processed. You will receive a notification when ready.',
       });
 
       // Cleanup and notify parent
@@ -206,7 +206,7 @@ export default function ChunkedVideoUploadDialog({
         resetForm();
         onUploadSuccess?.();
         onClose();
-      }, 2000);
+      }, 3000);
     } catch (error: any) {
       console.error('Upload failed:', error);
       setUploadStage('error');

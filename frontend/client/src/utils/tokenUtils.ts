@@ -64,3 +64,26 @@ export const getTokenExpiresIn = (token: string | null): number => {
     return 0;
   }
 };
+
+/**
+ * Get user role from JWT token
+ * @param token JWT token string
+ * @returns "Admin" | "User" | null
+ */
+export const getUserRole = (token: string | null): string | null => {
+  if (!token) return null;
+
+  try {
+    const decoded = jwtDecode<TokenPayload>(token);
+    
+    // ClaimTypes.Role in .NET becomes http://schemas.microsoft.com/ws/2008/06/identity/claims/role
+    const role = decoded["http://schemas.microsoft.com/ws/2008/06/identity/claims/role"] || 
+                 decoded["role"] || // Try simple "role" key as fallback
+                 null;
+    
+    return role;
+  } catch (error) {
+    console.error("Error decoding token role:", error);
+    return null;
+  }
+};

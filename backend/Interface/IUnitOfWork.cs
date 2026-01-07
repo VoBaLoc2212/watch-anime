@@ -8,6 +8,7 @@
 
         IRatingRepository Ratings { get; }
 
+        INotificationRepository Notifications { get; }
 
         Task<bool> Complete();
     }

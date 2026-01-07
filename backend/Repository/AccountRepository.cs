@@ -1,6 +1,8 @@
 ﻿using backend.Data;
+using backend.Enums;
 using backend.Interface;
 using backend.Models;
+using Microsoft.EntityFrameworkCore;
 
 namespace backend.Repository
 {
@@ -14,6 +16,20 @@ namespace backend.Repository
         {
             return await Task.FromResult(_context.Users.FirstOrDefault(u => u.Email.Equals(email)));
          }
+
+        public async Task<List<User>> GetAdminUsersAsync()
+        {
+            return await _context.Users
+                .Where(u => u.Role == UserRole.Admin)
+                .ToListAsync();
+        }
+
+        public async Task<List<User>> GetRegularUsersAsync()
+        {
+            return await _context.Users
+                .Where(u => u.Role == UserRole.User)
+                .ToListAsync();
+        }
 
     }
 }

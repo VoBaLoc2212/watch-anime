@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using backend.DTOs;
+using backend.Extensions;
 using backend.Interface;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -13,9 +14,10 @@ namespace backend.Controllers
     [Authorize(Policy = "AdminOnly")]
     public class ChunkedUploadController : BaseApiController
     {
-        private readonly IHLSConversionService _hlsService;
+        private readonly IDropletFFmpegService _dropletService;
         private readonly IUnitOfWork _uow;
         private readonly ILogger<ChunkedUploadController> _logger;
+        private readonly IServiceScopeFactory _serviceScopeFactory;
 
         // In-memory session storage (use Redis in production for scalability)
         private static readonly ConcurrentDictionary<string, UploadSession> _uploadSessions = new();
@@ -25,13 +27,15 @@ namespace backend.Controllers
         private const int CHUNK_SIZE_MB = 5; // 5MB chunks
 
         public ChunkedUploadController(
-            IHLSConversionService hlsService,
+            IDropletFFmpegService dropletService,
             IUnitOfWork uow,
-            ILogger<ChunkedUploadController> logger)
+            ILogger<ChunkedUploadController> logger,
+            IServiceScopeFactory serviceScopeFactory)
         {
-            _hlsService = hlsService;
+            _dropletService = dropletService;
             _uow = uow;
             _logger = logger;
+            _serviceScopeFactory = serviceScopeFactory;
 
             // Ensure temp directory exists
             Directory.CreateDirectory(TEMP_UPLOAD_DIR);
@@ -167,53 +171,133 @@ namespace backend.Controllers
                 _logger.LogInformation("Assembling chunks...");
                 var assembledVideoPath = await AssembleChunksAsync(session);
 
-                // Step 2: Convert to HLS
-                _logger.LogInformation("Converting to HLS...");
-                var hlsOutputDir = Path.Combine(TEMP_UPLOAD_DIR, $"{request.UploadId}_hls");
-                Directory.CreateDirectory(hlsOutputDir);
-
-                await _hlsService.ConvertToHLSAsync(assembledVideoPath, hlsOutputDir, progress =>
+                // Step 2: Get all Admin users for notifications
+                var adminUsers = await _uow.Accounts.GetAdminUsersAsync();
+                var adminIds = adminUsers.Select(a => a.Id).ToList();
+                
+                // Step 3: Send "Processing" notification to all Admins immediately
+                _logger.LogInformation("Sending processing notification to Admins...");
+                foreach (var adminId in adminIds)
                 {
-                    _logger.LogInformation($"HLS conversion progress: {progress}%");
-                });
-
-                // Step 3: Upload HLS files to Azure Blob
-                _logger.LogInformation("Uploading HLS to Azure Blob...");
-                var blobPath = $"anime/{session.AnimeSlug}/ep{session.EpisodeNumber}";
-                var masterUrl = await _hlsService.UploadHLSToAzureBlobAsync(hlsOutputDir, blobPath);
-
-                // Step 4: Create Episode record in database
-                _logger.LogInformation("Creating episode record...");
-                var anime = await _uow.Animes.GetAnimeByNameSlug(session.AnimeSlug);
-                if (anime == null)
-                {
-                    throw new Exception($"Anime not found: {session.AnimeSlug}");
+                    var processingNotif = new Models.Notification
+                    {
+                        UserId = adminId,
+                        Title = "Video Processing",
+                        Message = $"Episode {session.EpisodeNumber} of '{session.AnimeSlug}' is being converted to HLS format. Please wait...",
+                        Type = "info",
+                        IsRead = false
+                    };
+                    _uow.Notifications.Add(processingNotif);
                 }
-
-                var episode = new Models.Episode
-                {
-                    AnimeId = anime.Id,
-                    EpisodeNumber = session.EpisodeNumber,
-                    EpisodeName = session.EpisodeName,
-                    VideoUrl = masterUrl,
-                    Duration = TimeOnly.Parse(request.Duration),
-                };
-
-                _uow.Episodes.Add(episode);
                 await _uow.Complete();
 
-                // Step 5: Cleanup temp files
-                _logger.LogInformation("Cleaning up temp files...");
-                CleanupSession(session, assembledVideoPath, hlsOutputDir);
+                // Step 4: Start background Droplet FFmpeg encoding (don't wait)
+                _logger.LogInformation("Starting background Droplet FFmpeg encoding...");
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        _logger.LogInformation($"[Background] Converting with Droplet FFmpeg for {request.UploadId}");
 
-                _logger.LogInformation($"Upload completed successfully. Episode ID: {episode.Id}");
+                        // Convert to HLS using Droplet
+                        var spacePath = $"anime/{session.AnimeSlug}/ep{session.EpisodeNumber}";
+                        var (masterUrl, cdnUrl) = await _dropletService.ConvertToHLSAsync(
+                            assembledVideoPath,
+                            spacePath);
+
+                        _logger.LogInformation($"[Background] Droplet conversion completed. CDN URL: {cdnUrl}");
+
+                        // Create Episode record in database
+                        _logger.LogInformation($"[Background] Creating episode record for {request.UploadId}");
+                        
+                        // Create new scope for background task
+                        using var scope = _serviceScopeFactory.CreateScope();
+                        var bgUow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+                        
+                        var anime = await bgUow.Animes.GetAnimeByNameSlug(session.AnimeSlug);
+                        if (anime == null)
+                        {
+                            throw new Exception($"Anime not found: {session.AnimeSlug}");
+                        }
+
+                        var episode = new Models.Episode
+                        {
+                            AnimeId = anime.Id,
+                            EpisodeNumber = session.EpisodeNumber,
+                            EpisodeName = session.EpisodeName,
+                            VideoUrl = cdnUrl,
+                            Duration = TimeOnly.Parse(request.Duration),
+                        };
+
+                        bgUow.Episodes.Add(episode);
+                        await bgUow.Complete();
+
+                        // Send ONE success notification to all Admins only
+                        _logger.LogInformation("Sending success notification to Admins...");
+                        var bgAdminUsers = await bgUow.Accounts.GetAdminUsersAsync();
+                        foreach (var admin in bgAdminUsers)
+                        {
+                            var successNotif = new Models.Notification
+                            {
+                                UserId = admin.Id,
+                                Title = "Upload Completed",
+                                Message = $"Episode {session.EpisodeNumber} of '{anime.AnimeName}' has been uploaded and encoded successfully",
+                                Type = "success",
+                                Link = $"watch?animeName={session.AnimeSlug}",
+                                IsRead = false
+                            };
+                            bgUow.Notifications.Add(successNotif);
+                        }
+                        await bgUow.Complete();
+
+                        // Cleanup temp files
+                        _logger.LogInformation($"[Background] Cleaning up temp files for {request.UploadId}");
+                        CleanupSession(session, assembledVideoPath, null);
+
+                        _logger.LogInformation($"[Background] Upload completed successfully. Episode ID: {episode.Id}");
+                    }
+                    catch (Exception bgEx)
+                    {
+                        _logger.LogError(bgEx, $"[Background] Error processing upload {request.UploadId}");
+                        
+                        // Send ONE error notification to all Admins only
+                        try
+                        {
+                            using var scope = _serviceScopeFactory.CreateScope();
+                            var bgUow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+                            
+                            _logger.LogInformation("Sending error notification to Admins...");
+                            var bgAdminUsers = await bgUow.Accounts.GetAdminUsersAsync();
+                            foreach (var admin in bgAdminUsers)
+                            {
+                                var errorNotif = new Models.Notification
+                                {
+                                    UserId = admin.Id,
+                                    Title = "Upload Failed",
+                                    Message = $"Failed to process episode {session.EpisodeNumber} of '{session.AnimeSlug}'. Error: {bgEx.Message}",
+                                    Type = "error",
+                                    IsRead = false
+                                };
+                                bgUow.Notifications.Add(errorNotif);
+                            }
+                            await bgUow.Complete();
+                        }
+                        catch (Exception notifEx)
+                        {
+                            _logger.LogError(notifEx, "Failed to create error notification");
+                        }
+                    }
+                });
+
+                // Return immediately - processing continues in background
+                _logger.LogInformation($"Upload initiated for Droplet FFmpeg processing: {request.UploadId}");
 
                 return Ok(new CompleteChunkedUploadResponse
                 {
                     Success = true,
-                    Message = "Upload and conversion completed successfully",
-                    HlsMasterUrl = masterUrl,
-                    EpisodeId = episode.Id.ToString()
+                    Message = "Upload completed. Video is being encoded by Droplet FFmpeg. This may take 5-15 minutes depending on video length.",
+                    HlsMasterUrl = "processing", // Placeholder
+                    EpisodeId = "0" // Will be created when background processing completes
                 });
             }
             catch (Exception ex)
@@ -311,7 +395,7 @@ namespace backend.Controllers
         /// <summary>
         /// Cleanup temp files and session data
         /// </summary>
-        private void CleanupSession(UploadSession session, string assembledVideo, string hlsDir)
+        private void CleanupSession(UploadSession session, string assembledVideo, string? hlsDir)
         {
             try
             {
@@ -321,8 +405,8 @@ namespace backend.Controllers
                     System.IO.File.Delete(assembledVideo);
                 }
 
-                // Delete HLS temp directory
-                if (Directory.Exists(hlsDir))
+                // Delete HLS temp directory (if using local FFmpeg)
+                if (!string.IsNullOrEmpty(hlsDir) && Directory.Exists(hlsDir))
                 {
                     Directory.Delete(hlsDir, true);
                 }

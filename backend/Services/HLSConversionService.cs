@@ -119,51 +119,39 @@ namespace backend.Services
 
         /// <summary>
         /// Build optimized FFmpeg command for HLS adaptive streaming
-        /// Creates 3 quality variants in a single pass using filter_complex
+        /// Creates 2 quality variants (360p, 720p) for faster processing on low-spec servers
         /// </summary>
         private string BuildFFmpegHLSCommand(string inputPath, string outputDir)
         {
-            // PRODUCTION-READY FFMPEG COMMAND
-            // - Uses filter_complex to scale video to 3 resolutions in one pass
-            // - H.264 (libx264) with yuv420p for maximum compatibility
-            // - AAC audio at 128kbps
-            // - 6-second segments for optimal streaming
-            // - faststart flag for quick playback initialization
-            // - Preset medium for balance between speed and quality
+            // OPTIMIZED FOR LOW-SPEC SERVERS
+            // - Only 2 variants (360p, 720p) instead of 3 - faster processing
+            // - Preset 'fast' instead of 'medium' - 2x faster encoding
+            // - 10-second segments instead of 6 - fewer files to process
+            // - Lower bitrates for faster encoding
 
             return $@"-i ""{inputPath}"" " +
-                   // Video filter: scale to 3 resolutions
-                   $@"-filter_complex ""[0:v]split=3[v1][v2][v3]; " +
+                   // Video filter: scale to 2 resolutions
+                   $@"-filter_complex ""[0:v]split=2[v1][v2]; " +
                    $@"[v1]scale=w=640:h=360:force_original_aspect_ratio=decrease[v360]; " +
-                   $@"[v2]scale=w=1280:h=720:force_original_aspect_ratio=decrease[v720]; " +
-                   $@"[v3]scale=w=1920:h=1080:force_original_aspect_ratio=decrease[v1080]"" " +
+                   $@"[v2]scale=w=1280:h=720:force_original_aspect_ratio=decrease[v720]"" " +
 
                    // 360p output
                    $@"-map ""[v360]"" -map 0:a:0 " +
-                   $@"-c:v:0 libx264 -preset medium -crf 23 -maxrate 600k -bufsize 1200k " +
+                   $@"-c:v:0 libx264 -preset fast -crf 23 -maxrate 500k -bufsize 1000k " +
                    $@"-c:a:0 aac -b:a:0 96k -ar 48000 " +
                    $@"-pix_fmt yuv420p -profile:v:0 baseline -level 3.0 " +
-                   $@"-start_number 0 -hls_time 6 -hls_list_size 0 " +
+                   $@"-start_number 0 -hls_time 10 -hls_list_size 0 " +
                    $@"-hls_segment_filename ""{outputDir}/v0/seg%03d.ts"" " +
                    $@"-f hls ""{outputDir}/v0/playlist.m3u8"" " +
 
                    // 720p output
                    $@"-map ""[v720]"" -map 0:a:0 " +
-                   $@"-c:v:1 libx264 -preset medium -crf 22 -maxrate 1800k -bufsize 3600k " +
+                   $@"-c:v:1 libx264 -preset fast -crf 22 -maxrate 1500k -bufsize 3000k " +
                    $@"-c:a:1 aac -b:a:1 128k -ar 48000 " +
                    $@"-pix_fmt yuv420p -profile:v:1 main -level 3.1 " +
-                   $@"-start_number 0 -hls_time 6 -hls_list_size 0 " +
+                   $@"-start_number 0 -hls_time 10 -hls_list_size 0 " +
                    $@"-hls_segment_filename ""{outputDir}/v1/seg%03d.ts"" " +
-                   $@"-f hls ""{outputDir}/v1/playlist.m3u8"" " +
-
-                   // 1080p output
-                   $@"-map ""[v1080]"" -map 0:a:0 " +
-                   $@"-c:v:2 libx264 -preset medium -crf 21 -maxrate 3500k -bufsize 7000k " +
-                   $@"-c:a:2 aac -b:a:2 128k -ar 48000 " +
-                   $@"-pix_fmt yuv420p -profile:v:2 high -level 4.0 " +
-                   $@"-start_number 0 -hls_time 6 -hls_list_size 0 " +
-                   $@"-hls_segment_filename ""{outputDir}/v2/seg%03d.ts"" " +
-                   $@"-f hls ""{outputDir}/v2/playlist.m3u8""";
+                   $@"-f hls ""{outputDir}/v1/playlist.m3u8""";
         }
 
         /// <summary>
@@ -176,19 +164,12 @@ namespace backend.Services
             masterPlaylist.AppendLine("#EXT-X-VERSION:3");
 
             // 360p variant
-            masterPlaylist.AppendLine($"#EXT-X-STREAM-INF:BANDWIDTH=600000,RESOLUTION=640x360,CODECS=\"avc1.42e01e,mp4a.40.2\"");
+            masterPlaylist.AppendLine($"#EXT-X-STREAM-INF:BANDWIDTH=500000,RESOLUTION=640x360,CODECS=\"avc1.42e01e,mp4a.40.2\"");
             masterPlaylist.AppendLine("v0/playlist.m3u8");
 
             // 720p variant
-            masterPlaylist.AppendLine($"#EXT-X-STREAM-INF:BANDWIDTH=1800000,RESOLUTION=1280x720,CODECS=\"avc1.4d401f,mp4a.40.2\"");
+            masterPlaylist.AppendLine($"#EXT-X-STREAM-INF:BANDWIDTH=1500000,RESOLUTION=1280x720,CODECS=\"avc1.4d401f,mp4a.40.2\"");
             masterPlaylist.AppendLine("v1/playlist.m3u8");
-
-            // 1080p variant (only if source is >= 1080p)
-            if (metadata.Height >= 1080)
-            {
-                masterPlaylist.AppendLine($"#EXT-X-STREAM-INF:BANDWIDTH=3500000,RESOLUTION=1920x1080,CODECS=\"avc1.640028,mp4a.40.2\"");
-                masterPlaylist.AppendLine("v2/playlist.m3u8");
-            }
 
             await File.WriteAllTextAsync(outputPath, masterPlaylist.ToString());
         }

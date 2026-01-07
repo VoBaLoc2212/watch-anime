@@ -16,6 +16,8 @@ namespace backend.Data
 
         public DbSet<Rating> Ratings { get; set; }
 
+        public DbSet<Notification> Notifications { get; set; }
+
         protected override void OnModelCreating(ModelBuilder builder)
         {
             base.OnModelCreating(builder);

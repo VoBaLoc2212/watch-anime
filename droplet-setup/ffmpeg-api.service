@@ -1,0 +1,16 @@
+[Unit]
+Description=FFmpeg Video Conversion API
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/ffmpeg-api
+Environment="PATH=/opt/ffmpeg-api/venv/bin"
+EnvironmentFile=/opt/ffmpeg-api/.env
+ExecStart=/opt/ffmpeg-api/venv/bin/gunicorn -w 2 -b 0.0.0.0:5000 --timeout 3600 api_server:app
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
