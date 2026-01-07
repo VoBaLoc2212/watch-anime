@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import ReactPlayer from "react-player";
+import Hls from "hls.js";
 
 // --- TYPES ---
 interface VideoPlayerProps {
@@ -73,6 +74,7 @@ export function VideoPlayer({
   const abortControllerRef = useRef<AbortController | null>(null);
   const isMountedRef = useRef(true);
   const bufferTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const hlsRef = useRef<Hls | null>(null);
 
   // --- STATE ---
   const [state, setState] = useState<PlayerState>(INITIAL_STATE);
@@ -103,7 +105,7 @@ export function VideoPlayer({
     return `${mm}:${ss}`;
   };
 
-  // --- EFFECT: VIDEO URL CHANGE (Abort + Reset) ---
+  // --- EFFECT: VIDEO URL CHANGE (Abort + Reset + HLS Setup) ---
   useEffect(() => {
     if (videoUrl && videoUrl !== prevVideoUrlRef.current) {
       // Abort request cũ nếu có
@@ -125,6 +127,81 @@ export function VideoPlayer({
         loadedSeconds: 0,
         duration: 0,
       }));
+
+      // 3. Setup HLS.js for browsers that don't natively support HLS
+      const player = playerRef.current;
+      if (player && videoUrl.includes('.m3u8')) {
+        // Destroy previous HLS instance if exists
+        if (hlsRef.current) {
+          hlsRef.current.destroy();
+          hlsRef.current = null;
+        }
+
+        console.log("=== Video URL Setup ===");
+        console.log("URL:", videoUrl);
+        console.log("Hls object available:", typeof Hls !== 'undefined');
+        console.log("Hls.isSupported():", Hls?.isSupported?.());
+        console.log("Native HLS support:", player.canPlayType('application/vnd.apple.mpegurl'));
+        console.log("======================");
+
+        // Check if browser natively supports HLS (Safari, Edge)
+        if (player.canPlayType('application/vnd.apple.mpegurl')) {
+          console.log("✅ Browser supports HLS natively");
+          player.src = videoUrl;
+        } 
+        // Use HLS.js for Chrome, Firefox, etc.
+        else if (Hls && Hls.isSupported && Hls.isSupported()) {
+          console.log("✅ Using HLS.js for playback");
+          try {
+            const hls = new Hls({
+              debug: false,
+              enableWorker: true,
+              lowLatencyMode: false,
+              backBufferLength: 90,
+              maxBufferLength: 30,
+              maxMaxBufferLength: 600,
+            });
+
+            hls.loadSource(videoUrl);
+            hls.attachMedia(player);
+
+            hls.on(Hls.Events.MANIFEST_PARSED, () => {
+              console.log("✅ HLS manifest parsed successfully");
+              setIsLoadingVideo(false);
+            });
+
+            hls.on(Hls.Events.ERROR, (event, data) => {
+              console.error("❌ HLS Error:", data);
+              if (data.fatal) {
+                switch (data.type) {
+                  case Hls.ErrorTypes.NETWORK_ERROR:
+                    console.error("Fatal network error, trying to recover");
+                    hls.startLoad();
+                    break;
+                  case Hls.ErrorTypes.MEDIA_ERROR:
+                    console.error("Fatal media error, trying to recover");
+                    hls.recoverMediaError();
+                    break;
+                  default:
+                    console.error("Fatal error, cannot recover");
+                    hls.destroy();
+                    setIsLoadingVideo(false);
+                    break;
+                }
+              }
+            });
+
+            hlsRef.current = hls;
+          } catch (error) {
+            console.error("❌ Error creating HLS instance:", error);
+            setIsLoadingVideo(false);
+          }
+        } else {
+          console.error("❌ HLS is not supported in this browser and no native support available");
+          console.error("Hls object:", Hls);
+          setIsLoadingVideo(false);
+        }
+      }
     }
   }, [videoUrl, episode]);
 
@@ -329,6 +406,11 @@ export function VideoPlayer({
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
+      // Cleanup HLS instance
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
     };
   }, []);
 
@@ -337,18 +419,20 @@ export function VideoPlayer({
       ref={containerRef}
       className="relative aspect-video bg-black rounded-md overflow-hidden group select-none"
       onMouseMove={handleMouseMove}
+      onMouseLeave={() => setShowControls(false)}
       data-testid="video-player"
     >
       {videoUrl ? (
         <>
-          {/* Native HTML5 Video for Azure Blob */}
+          {/* HTML5 Video with HLS.js support for cross-browser compatibility */}
           <video
             ref={setPlayerRef}
-            className="w-full h-full object-contain"
-            src={videoUrl}
+            className="w-full h-full object-contain cursor-pointer"
             controls={false}
             playsInline
+            preload="metadata"
             crossOrigin="anonymous"
+            onClick={handlePlayPause}
             onLoadedMetadata={handleDurationChange}
             onTimeUpdate={handleTimeUpdate}
             onProgress={handleProgress}
@@ -360,7 +444,11 @@ export function VideoPlayer({
             onEnded={handleEnded}
             onError={(e: any) => {
               console.error("Video playback error:", e);
-              console.error("Video URL:", videoUrl);
+              console.error("Error details:", {
+                code: e.target?.error?.code,
+                message: e.target?.error?.message,
+                url: videoUrl
+              });
               setIsLoadingVideo(false);
               setState(prev => ({ ...prev, playing: false }));
             }}
@@ -370,8 +458,7 @@ export function VideoPlayer({
         <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-primary/20 to-purple-900/40">
           <div className="text-center text-white">
             <Play className="h-20 w-20 mx-auto mb-4 opacity-50" />
-            <p className="text-xl font-semibold">No video source</p>
-            <p className="text-sm text-white/70">Please select an episode</p>
+            <p className="text-xl font-semibold">Chưa có tập nào</p>
           </div>
         </div>
       )}
@@ -387,18 +474,14 @@ export function VideoPlayer({
         </div>
       )}
 
-      {/* Overlay Play Button (Big Center) */}
-      {!playing && !isLoadingVideo && (
+      {/* Overlay Play Button (Big Center) - Only show when paused and has video */}
+      {!playing && !isLoadingVideo && videoUrl && (
         <div
-          className="absolute inset-0 flex items-center justify-center bg-black/40 cursor-pointer z-10"
+          className="absolute inset-0 flex items-center justify-center bg-black/20 cursor-pointer z-10"
           onClick={handlePlayPause}
         >
           <div className="text-center text-white">
-            <Play className="h-20 w-20 mx-auto mb-4 opacity-70 hover:opacity-100 transition-opacity" />
-            <p className="text-xl font-semibold drop-shadow-md">{title}</p>
-            <p className="text-sm text-white/80 drop-shadow-md">
-              Episode {episode}
-            </p>
+            <Play className="h-20 w-20 mx-auto opacity-70 hover:opacity-100 transition-opacity drop-shadow-lg" />
           </div>
         </div>
       )}

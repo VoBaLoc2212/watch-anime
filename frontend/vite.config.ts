@@ -37,12 +37,22 @@ export default defineConfig(async ({ command, mode }) => {
       },
     },
     optimizeDeps: {
-    exclude: ['@ffmpeg/ffmpeg', '@ffmpeg/util'],
-  },
+      exclude: ['@ffmpeg/ffmpeg', '@ffmpeg/util'],
+      include: ['hls.js'],
+    },
     root: path.resolve(import.meta.dirname, "client"),
     build: {
       outDir: path.resolve(import.meta.dirname, "dist/public"),
       emptyOutDir: true,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'hls-vendor': ['hls.js'],
+          },
+        },
+      },
+      // Use esbuild for minification (faster than terser)
+      minify: 'esbuild',
     },
     server: {
       host,
