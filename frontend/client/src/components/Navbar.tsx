@@ -1,8 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { SearchBar } from "./SearchBar";
-import { ThemeToggle } from "./ThemeToggle";
 import NotificationBell from "./NotificationBell";
-import { Tv, User, KeyRound, LogOut } from "lucide-react";
+import { Tv, User, KeyRound, LogOut, Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -13,7 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useTokenFromUrl, useUserInfo } from "@/hooks/useTokenUrl";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ChangePasswordDialog } from "./ChangePasswordDialog";
 
 export function Navbar() {
@@ -21,17 +20,33 @@ export function Navbar() {
   useTokenFromUrl();
   const { data: userInfo } = useUserInfo();
   const [showChangePasswordDialog, setShowChangePasswordDialog] = useState(false);
+  const [theme, setTheme] = useState<"light" | "dark">("light");
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem("theme") as "light" | "dark" | null;
+    const initialTheme = savedTheme || "light";
+    setTheme(initialTheme);
+    document.documentElement.classList.toggle("dark", initialTheme === "dark");
+  }, []);
+
+  const toggleTheme = () => {
+    const newTheme = theme === "light" ? "dark" : "light";
+    setTheme(newTheme);
+    localStorage.setItem("theme", newTheme);
+    document.documentElement.classList.toggle("dark", newTheme === "dark");
+  };
+
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="flex h-16 items-center justify-between px-8 gap-4">
-        <div className="flex items-center gap-8">
+      <div className="flex h-14 sm:h-16 items-center justify-between px-3 sm:px-6 lg:px-8 gap-2 sm:gap-4">
+        <div className="flex items-center gap-4 sm:gap-8">
           <Link href="/">
             <div
               className="flex items-center gap-2 cursor-pointer"
               data-testid="link-logo"
             >
-              <Tv className="h-6 w-6 text-primary" />
-              <span className="text-xl font-bold">AniVerSiTy</span>
+              <Tv className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
+              <span className="hidden sm:inline text-xl font-bold">AniVerSiTy</span>
             </div>
           </Link>
           <nav className="hidden md:flex gap-6">
@@ -55,11 +70,10 @@ export function Navbar() {
             </Link>
           </nav>
         </div>
-        <div className="flex flex-1 mx-4 md:mx-8 lg:mx-16">
+        <div className="flex flex-1 mx-2 sm:mx-4 lg:mx-16">
           <SearchBar />
         </div>
-        <div className="flex items-center gap-4">
-          <ThemeToggle />
+        <div className="flex items-center gap-2 sm:gap-4">
           {(() => {
             const isClient = typeof window !== "undefined";
             const token = isClient
@@ -70,12 +84,12 @@ export function Navbar() {
               return (
                 <div className="flex items-center gap-2">
                   <Link href="/register">
-                    <Button variant="ghost" data-testid="btn-register">
+                    <Button variant="ghost" size="sm" className="text-xs sm:text-sm" data-testid="btn-register">
                       Register
                     </Button>
                   </Link>
                   <Link href="/login">
-                    <Button data-testid="btn-login">Login</Button>
+                    <Button size="sm" className="text-xs sm:text-sm" data-testid="btn-login">Login</Button>
                   </Link>
                 </div>
               );
@@ -106,7 +120,7 @@ export function Navbar() {
                       <img
                         src={photoUrl}
                         alt={fullName}
-                        className="h-8 w-8 rounded-full object-cover"
+                        className="h-7 w-7 sm:h-8 sm:w-8 rounded-full object-cover"
                         data-testid="user-photo"
                         referrerPolicy="no-referrer"
                         onError={(e) => {
@@ -117,12 +131,12 @@ export function Navbar() {
                       />
                     ) : null}
                     <div
-                      className={`h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-medium ${photoUrl ? 'hidden' : ''}`}
+                      className={`h-7 w-7 sm:h-8 sm:w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-medium text-sm ${photoUrl ? 'hidden' : ''}`}
                       data-testid="user-initial"
                     >
                       {initial}
                     </div>
-                    <div className="flex flex-col leading-tight">
+                    <div className="hidden md:flex flex-col leading-tight">
                       <span
                         className="text-sm font-medium"
                         data-testid="user-fullname"
@@ -164,6 +178,17 @@ export function Navbar() {
                   >
                     <KeyRound className="mr-2 h-4 w-4" />
                     Change Password
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={toggleTheme}
+                    data-testid="menu-item-theme-toggle"
+                  >
+                    {theme === "light" ? (
+                      <Moon className="mr-2 h-4 w-4" />
+                    ) : (
+                      <Sun className="mr-2 h-4 w-4" />
+                    )}
+                    Giao diện: {theme === "light" ? "Sáng" : "Tối"}
                   </DropdownMenuItem>
                   {userInfo?.role === "Admin" && (
                     <Link href="/manage-anime">
