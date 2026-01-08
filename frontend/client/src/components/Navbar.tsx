@@ -46,7 +46,7 @@ export function Navbar() {
               data-testid="link-logo"
             >
               <Tv className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
-              <span className="hidden sm:inline text-xl font-bold">AniVerSiTy</span>
+              <span className="hidden sm:inline text-xl font-bold">Animever</span>
             </div>
           </Link>
           <nav className="hidden md:flex gap-6">
@@ -188,7 +188,7 @@ export function Navbar() {
                     ) : (
                       <Sun className="mr-2 h-4 w-4" />
                     )}
-                    Giao diện: {theme === "light" ? "Sáng" : "Tối"}
+                    Theme: {theme === "light" ? "Light" : "Dark"}
                   </DropdownMenuItem>
                   {userInfo?.role === "Admin" && (
                     <Link href="/manage-anime">

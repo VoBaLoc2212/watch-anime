@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Layout } from "@/components/Layout";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/Dashboard";
+import BrowsePage from "@/pages/BrowsePage";
 import WatchPage from "@/pages/WatchPage";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
@@ -38,6 +39,13 @@ function Router() {
         {() => (
           <Layout>
             <Dashboard />
+          </Layout>
+        )}
+      </Route>
+      <Route path="/browse">
+        {() => (
+          <Layout>
+            <BrowsePage />
           </Layout>
         )}
       </Route>

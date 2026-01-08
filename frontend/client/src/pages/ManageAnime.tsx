@@ -25,6 +25,10 @@ function ManageAnimeContent() {
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [sortBy, setSortBy] = useState<string>("animeName");
 
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
   const { data: animes = [], isLoading } = useQuery({
     queryKey: ['animes'],
     queryFn: GetAnimeListApi,

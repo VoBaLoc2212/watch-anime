@@ -1,9 +1,14 @@
 import { LoginForm } from "@/components/LoginForm";
 import { Tv } from "lucide-react";
 import { Link } from "wouter";
+import { useEffect } from "react";
 import heroImage from "@assets/generated_images/hero_banner_anime_warrior.png";
 
 export default function Login() {
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
   return (
     <div className="min-h-screen flex">
       <div

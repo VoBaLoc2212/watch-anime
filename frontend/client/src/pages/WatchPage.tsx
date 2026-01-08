@@ -40,6 +40,10 @@ export default function WatchPage() {
   const [isLoadingRatings, setIsLoadingRatings] = useState(false);
 
   useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [animeName]);
+
+  useEffect(() => {
     const loadData = async () => {
       if (!animeName) {
         setError("No anime selected. Please select an anime from the home page.");

@@ -1,9 +1,14 @@
 import { RegisterForm } from "@/components/RegisterForm";
 import { Tv } from "lucide-react";
 import { Link } from "wouter";
+import { useEffect } from "react";
 import heroImage from "@assets/generated_images/fantasy_battle_hero_banner.png";
 
 export default function Register() {
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
   return (
     <div className="min-h-screen flex">
       <div

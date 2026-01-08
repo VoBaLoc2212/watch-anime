@@ -56,6 +56,11 @@ export default function UserInformation() {
   const [phoneNumber, setPhoneNumber] = useState<string>("");
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const { data: userInfo } = useUserInfo();
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
   const form = useForm<UserInfoFormData>({
     resolver: zodResolver(userInfoSchema),
     defaultValues: {

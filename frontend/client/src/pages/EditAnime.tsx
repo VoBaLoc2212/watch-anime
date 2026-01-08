@@ -35,6 +35,10 @@ export default function EditAnime() {
   const animeName = new URLSearchParams(searchParams).get("animeName");
   const queryClient = useQueryClient();
   
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+  
   const [isUpdating, setIsUpdating] = useState(false);
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);

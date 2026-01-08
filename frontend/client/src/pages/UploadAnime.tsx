@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -36,6 +36,10 @@ export default function UploadAnime() {
   const [showCropDialog, setShowCropDialog] = useState(false);
   const [tempImageSrc, setTempImageSrc] = useState<string>("");
   const [errorMessage, setErrorMessage] = useState<string>("");
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
 
   const form = useForm<AnimeUploadFormData>({
     resolver: zodResolver(animeUploadSchema),

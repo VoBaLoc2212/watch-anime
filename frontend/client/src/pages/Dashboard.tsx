@@ -3,6 +3,7 @@ import { AnimeRow } from "@/components/AnimeRow";
 import { GetAnimeListApi } from "@/api/AnimeAPI";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
 import heroImage1 from "@assets/generated_images/hero_banner_anime_warrior.png";
 import heroImage2 from "@assets/generated_images/fantasy_battle_hero_banner.png";
 import { Anime } from "@/models/AnimeModel";
@@ -10,6 +11,10 @@ import { Anime } from "@/models/AnimeModel";
 
 export default function Dashboard() {
   const { toast } = useToast();
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
 
   const { data: animes = [], isLoading, isError, error } = useQuery({
     queryKey: ['animes'],
