@@ -3,6 +3,7 @@ import { EpisodeGrid } from "@/components/EpisodeGrid";
 import { AnimeRow } from "@/components/AnimeRow";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { useSearch, useLocation } from "wouter";
 import { useEffect, useState } from "react";
 import { useTokenCheck } from "@/hooks/useTokenCheck";
@@ -14,6 +15,11 @@ import { GetAnimeDetailApi } from "@/api/AnimeAPI";
 import { Anime } from "@/models/AnimeModel";
 import { Episode } from "@/models/EpisodeModel";
 import { GetEpisodesApi } from "@/api/EpisodeAPI";
+import { RatingModal } from "@/components/RatingModal";
+import { RatingsList } from "@/components/RatingsList";
+import { Star } from "lucide-react";
+import { GetRatingsForAnimeApi } from "@/api/RatingAPI";
+import { Rating } from "@/models/RatingModel";
 
 export default function WatchPage() {
   // Enforce token validity for watch pages only
@@ -29,6 +35,9 @@ export default function WatchPage() {
   const [episodes, setEpisodes] = useState<Array<Episode>>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isRatingModalOpen, setIsRatingModalOpen] = useState(false);
+  const [ratings, setRatings] = useState<Rating[]>([]);
+  const [isLoadingRatings, setIsLoadingRatings] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -66,6 +75,23 @@ export default function WatchPage() {
       }
     };
     loadEpisodes();
+  }, [animeName]);
+
+  useEffect(() => {
+    const loadRatings = async () => {
+      if (!animeName) return;
+
+      try {
+        setIsLoadingRatings(true);
+        const ratingsData = await GetRatingsForAnimeApi(animeName);
+        setRatings(ratingsData);
+      } catch (err) {
+        console.error("Failed to load ratings:", err);
+      } finally {
+        setIsLoadingRatings(false);
+      }
+    };
+    loadRatings();
   }, [animeName]);
 
   // Update episode from URL when it changes
@@ -173,7 +199,18 @@ export default function WatchPage() {
             />
             <Card>
               <CardHeader>
-                <CardTitle>{animeDetails?.animeName}</CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle>{animeDetails?.animeName}</CardTitle>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setIsRatingModalOpen(true)}
+                    className="gap-2"
+                  >
+                    <Star className="w-4 h-4" />
+                    Add Rating
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex flex-wrap gap-2">
@@ -189,6 +226,9 @@ export default function WatchPage() {
                 <p className="text-muted-foreground">{animeDetails?.description}</p>
               </CardContent>
             </Card>
+
+            {/* User Reviews Section */}
+            <RatingsList ratings={ratings} isLoading={isLoadingRatings} />
           </div>
 
           <div className="space-y-8">
@@ -231,6 +271,25 @@ export default function WatchPage() {
             </Card>
           </div>
         </div>
+
+        {/* Rating Modal */}
+        {animeName && animeDetails && (
+          <RatingModal
+            open={isRatingModalOpen}
+            onOpenChange={setIsRatingModalOpen}
+            animeSlug={animeName}
+            animeName={animeDetails.animeName}
+            onSuccess={async () => {
+              // Reload ratings after successful submission
+              try {
+                const ratingsData = await GetRatingsForAnimeApi(animeName);
+                setRatings(ratingsData);
+              } catch (err) {
+                console.error("Failed to reload ratings:", err);
+              }
+            }}
+          />
+        )}
 
         {/* <AnimeRow title="You Might Also Like" animes={relatedAnime} /> */}
       </main>

@@ -1,6 +1,7 @@
 const API_URL = import.meta.env.API_URL ?? import.meta.env.VITE_API_URL;
 
 import { Rating } from "@/models/RatingModel";
+import axios from "axios";
 
 export const GetRatingsForAnimeApi = async (animeId: string): Promise<Rating[]> => {
     const response = await fetch(`${API_URL}/api/rating/get-animeratings?animeSlug=${animeId}`, {
@@ -12,5 +13,38 @@ export const GetRatingsForAnimeApi = async (animeId: string): Promise<Rating[]> 
         throw new Error(errorMessage);
     }
     return response.json() as Promise<Rating[]>;
+}
+
+export const AddAnimeRatingApi = async (
+    animeSlug: string, 
+    score: number, 
+    review: string
+): Promise<string> => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+        throw new Error('Authentication required');
+    }
+
+    const response = await fetch(`${API_URL}/api/rating/add-animerating`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+            animeSlug,
+            score,
+            review
+        })
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json();
+        let errorMessage = errorData.message || errorData.title || JSON.stringify(errorData);
+        throw new Error(errorMessage);
+    }
+
+
+    return response.json() as Promise<string>;
 }
 
