@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -9,8 +9,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Star } from "lucide-react";
-import { AddAnimeRatingApi } from "@/api/RatingAPI";
+import { AddAnimeRatingApi, UpdateAnimeRatingApi } from "@/api/RatingAPI";
 import { useToast } from "@/hooks/use-toast";
+import { Rating } from "@/models/RatingModel";
 
 interface RatingModalProps {
   open: boolean;
@@ -18,6 +19,7 @@ interface RatingModalProps {
   animeSlug: string;
   animeName: string;
   onSuccess?: () => void;
+  existingRating?: Rating | null;
 }
 
 const scoreLabels = [
@@ -39,11 +41,23 @@ export function RatingModal({
   animeSlug,
   animeName,
   onSuccess,
+  existingRating,
 }: RatingModalProps) {
   const [selectedScore, setSelectedScore] = useState<number | null>(null);
   const [review, setReview] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
+
+  // Pre-fill form when editing existing rating
+  useEffect(() => {
+    if (existingRating) {
+      setSelectedScore(existingRating.score);
+      setReview(existingRating.review || "");
+    } else {
+      setSelectedScore(null);
+      setReview("");
+    }
+  }, [existingRating, open]);
 
   const handleSubmit = async () => {
     if (!selectedScore) {
@@ -57,10 +71,16 @@ export function RatingModal({
 
     setIsSubmitting(true);
     try {
-      await AddAnimeRatingApi(animeSlug, selectedScore, review);
+      if (existingRating) {
+        await UpdateAnimeRatingApi(animeSlug, selectedScore, review);
+      } else {
+        await AddAnimeRatingApi(animeSlug, selectedScore, review);
+      }
       toast({
-        title: "Rating Submitted",
-        description: "Your rating has been added successfully",
+        title: existingRating ? "Rating Updated" : "Rating Submitted",
+        description: existingRating 
+          ? "Your rating has been updated successfully"
+          : "Your rating has been added successfully",
       });
       onOpenChange(false);
       setSelectedScore(null);
@@ -84,9 +104,11 @@ export function RatingModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>Rate {animeName}</DialogTitle>
+          <DialogTitle>{existingRating ? "Edit Your Rating" : "Rate"} {animeName}</DialogTitle>
           <DialogDescription>
-            Share your thoughts and rating for this anime
+            {existingRating 
+              ? "Update your rating and review for this anime"
+              : "Share your thoughts and rating for this anime"}
           </DialogDescription>
         </DialogHeader>
 
@@ -149,7 +171,9 @@ export function RatingModal({
             disabled={isSubmitting || !selectedScore}
             className="w-full"
           >
-            {isSubmitting ? "Submitting..." : "Submit Review"}
+            {isSubmitting 
+              ? (existingRating ? "Updating..." : "Submitting...") 
+              : (existingRating ? "Edit Review" : "Submit Review")}
           </Button>
         </div>
       </DialogContent>

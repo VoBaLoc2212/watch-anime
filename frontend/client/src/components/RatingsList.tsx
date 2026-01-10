@@ -100,7 +100,24 @@ export function RatingsList({ ratings, isLoading }: RatingsListProps) {
                   <User className="w-4 h-4 text-primary" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm truncate">{rating.userName}</p>
+                  <p className="font-medium text-sm truncate flex items-center gap-1">
+                    {rating.userName}
+                    {rating.updatedAt && (
+                      <span 
+                        className="text-xs text-muted-foreground/60 italic cursor-help font-normal"
+                        title={`Edited: ${new Date(rating.updatedAt).toLocaleString('en-US', {
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          hour12: true
+                        })}`}
+                      >
+                        • Edited
+                      </span>
+                    )}
+                  </p>
                   <p className="text-xs text-muted-foreground">
                     {formatDistanceToNow(new Date(rating.createdAt), {
                       addSuffix: true,

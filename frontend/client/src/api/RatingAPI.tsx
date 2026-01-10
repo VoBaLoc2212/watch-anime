@@ -25,14 +25,13 @@ export const AddAnimeRatingApi = async (
         throw new Error('Authentication required');
     }
 
-    const response = await fetch(`${API_URL}/api/rating/add-animerating`, {
+    const response = await fetch(`${API_URL}/api/rating/add-animerating?animeSlug=${animeSlug}`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-            animeSlug,
             score,
             review
         })
@@ -48,3 +47,30 @@ export const AddAnimeRatingApi = async (
     return response.json() as Promise<string>;
 }
 
+export const UpdateAnimeRatingApi = async (animeSlug : string, score: number, review: string): Promise<string> => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+        throw new Error('Authentication required');
+    }
+
+    const response = await fetch(`${API_URL}/api/rating/update-animerating?animeSlug=${animeSlug}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+            score,
+            review
+        })
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json();
+        let errorMessage = errorData.message || errorData.title || JSON.stringify(errorData);
+        throw new Error(errorMessage);
+    }
+
+    return response.json() as Promise<string>;
+
+}

@@ -15,20 +15,20 @@ namespace backend.Controllers
         }
 
         [HttpGet("get-animeratings")]
-        public async Task<ActionResult<RatingGetDTO>> GetRatings([FromQuery] string animeSlug)
+        public async Task<ActionResult<ICollection<RatingGetDTO>>> GetRatings([FromQuery] string animeSlug)
         {
             var anime = await _uow.Animes.GetAnimeByNameSlug(animeSlug);
             if (anime == null) return NotFound(new { message = "Anime not found" });
             var ratings = await _uow.Ratings.GetRatingsByAnimeIdAsync(anime.Id);
 
-            return Ok(_uow.Ratings.GetQueryable(a => a.Anime)
-                .Select(r => new RatingGetDTO
-                {
-                    Score = r.Score,
-                    Review = r.Review,
-                    UserName = r.User.FirstName + " " + r.User.LastName,
-                    CreatedAt = r.CreatedAt
-                }));
+            return ratings.Select(r => new RatingGetDTO
+            {
+                Score = r.Score,
+                Review = r.Review,
+                UserName = $"{r.User.FirstName} {r.User.LastName}",
+                CreatedAt = r.CreatedAt,
+                UpdatedAt = r.UpdatedAt
+            }).ToList();
 
         }
 
@@ -65,6 +65,24 @@ namespace backend.Controllers
             _uow.Ratings.Delete(rating);
             if (await _uow.Complete()) return Ok(new { message = "Rating deleted successfully" });
             return BadRequest(new { message = "Failed to delete rating" });
+        }
+
+        [Authorize(Policy = "MemberSection")]
+        [HttpPut("update-animerating")]
+        public async Task<ActionResult> UpdateRating([FromQuery] string animeSlug, [FromBody] RatingDTO ratingDTO)
+        {
+            var user = await _uow.Accounts.GetUserByEmail(User.GetEmail());
+            var anime = await _uow.Animes.GetAnimeByNameSlug(animeSlug);
+            if (anime == null) return NotFound(new { message = "Anime not found" });
+            var rating = _uow.Ratings.GetQueryable(a => a.Anime)
+                .FirstOrDefault(r => r.CreatedById == user.Id && r.ReportedAnimeId == anime.Id);
+            if (rating == null) return NotFound(new { message = "Rating not found" });
+            rating.Score = ratingDTO.Score;
+            rating.Review = ratingDTO.Review;
+            rating.UpdatedAt = DateTime.UtcNow;
+            _uow.Ratings.Update(rating);
+            if (await _uow.Complete()) return Ok(new {message = "Successfully update rating"});
+            return BadRequest(new { message = "Failed to update rating" });
         }
     }
 }

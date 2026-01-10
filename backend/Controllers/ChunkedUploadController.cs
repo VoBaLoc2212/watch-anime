@@ -200,7 +200,10 @@ namespace backend.Controllers
                         _logger.LogInformation($"[Background] Converting with Droplet FFmpeg for {request.UploadId}");
 
                         // Convert to HLS using Droplet
-                        var spacePath = $"anime/{session.AnimeSlug}/ep{session.EpisodeNumber}";
+                        using var scope = _serviceScopeFactory.CreateScope();
+                        var bgUow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+                        var anime = await bgUow.Animes.GetAnimeByNameSlug(session.AnimeSlug);
+                        var spacePath = $"anime/{anime.AnimeName}/ep{session.EpisodeNumber}";
                         var (masterUrl, cdnUrl) = await _dropletService.ConvertToHLSAsync(
                             assembledVideoPath,
                             spacePath);
@@ -211,10 +214,8 @@ namespace backend.Controllers
                         _logger.LogInformation($"[Background] Creating episode record for {request.UploadId}");
                         
                         // Create new scope for background task
-                        using var scope = _serviceScopeFactory.CreateScope();
-                        var bgUow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
                         
-                        var anime = await bgUow.Animes.GetAnimeByNameSlug(session.AnimeSlug);
+                        
                         if (anime == null)
                         {
                             throw new Exception($"Anime not found: {session.AnimeSlug}");

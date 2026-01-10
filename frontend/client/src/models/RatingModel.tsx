@@ -3,4 +3,5 @@ export interface Rating {
   createdAt: string
   score: number
   review: string
+  updatedAt?: string | null
 }

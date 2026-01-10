@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useSearch, useLocation } from "wouter";
 import { useEffect, useState } from "react";
 import { useTokenCheck } from "@/hooks/useTokenCheck";
+import { useUserInfo } from "@/hooks/useTokenUrl";
 import heroImage from "@assets/generated_images/hero_banner_anime_warrior.png";
 import magicalGirlImage from "@assets/generated_images/magical_girl_anime_poster.png";
 import darkFantasyImage from "@assets/generated_images/dark_fantasy_anime_poster.png";
@@ -17,7 +18,7 @@ import { Episode } from "@/models/EpisodeModel";
 import { GetEpisodesApi } from "@/api/EpisodeAPI";
 import { RatingModal } from "@/components/RatingModal";
 import { RatingsList } from "@/components/RatingsList";
-import { Star } from "lucide-react";
+import { Star, Edit } from "lucide-react";
 import { GetRatingsForAnimeApi } from "@/api/RatingAPI";
 import { Rating } from "@/models/RatingModel";
 
@@ -30,6 +31,7 @@ export default function WatchPage() {
   const animeName = params.get("animeName");
   const episodeParam = params.get("episode");
   const [currentEpisode, setCurrentEpisode] = useState(episodeParam ? parseInt(episodeParam) : 1);
+  const { data: userInfo } = useUserInfo();
 
   const [animeDetails, setAnimeDetails] = useState<Anime | null>(null);
   const [episodes, setEpisodes] = useState<Array<Episode>>([]);
@@ -205,15 +207,41 @@ export default function WatchPage() {
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle>{animeDetails?.animeName}</CardTitle>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => setIsRatingModalOpen(true)}
-                    className="gap-2"
-                  >
-                    <Star className="w-4 h-4" />
-                    Add Rating
-                  </Button>
+                  {(() => {
+                    // Check if current user has already rated this anime
+                    const userRating = userInfo?.fullName 
+                      ? ratings.find(r => r.userName === userInfo.fullName)
+                      : null;
+
+                    if (userRating) {
+                      // User has already rated - show their rating with edit button
+                      return (
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => setIsRatingModalOpen(true)}
+                          className="gap-2"
+                        >
+                          <Star className="w-4 h-4 fill-yellow-500 text-yellow-500" />
+                          Your Rating: {userRating.score}★
+                          <Edit className="w-3 h-3 ml-1" />
+                        </Button>
+                      );
+                    } else {
+                      // User hasn't rated yet - show add rating button
+                      return (
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => setIsRatingModalOpen(true)}
+                          className="gap-2"
+                        >
+                          <Star className="w-4 h-4" />
+                          Add Rating
+                        </Button>
+                      );
+                    }
+                  })()}
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -283,6 +311,11 @@ export default function WatchPage() {
             onOpenChange={setIsRatingModalOpen}
             animeSlug={animeName}
             animeName={animeDetails.animeName}
+            existingRating={
+              userInfo?.fullName 
+                ? ratings.find(r => r.userName === userInfo.fullName) || null
+                : null
+            }
             onSuccess={async () => {
               // Reload ratings after successful submission
               try {

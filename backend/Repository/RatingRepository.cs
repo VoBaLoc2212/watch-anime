@@ -1,6 +1,7 @@
 ﻿using backend.Data;
 using backend.Interface;
 using backend.Models;
+using Microsoft.EntityFrameworkCore;
 using System.Collections.Immutable;
 
 namespace backend.Repository
@@ -13,7 +14,10 @@ namespace backend.Repository
 
         public async Task<IEnumerable<Rating>> GetRatingsByAnimeIdAsync(Guid animeId)
         {
-            return await Task.FromResult(_context.Ratings.Where(r => r.ReportedAnimeId == animeId).ToImmutableList());
+            return await _context.Ratings
+           .Include(r => r.User)
+           .Where(r => r.ReportedAnimeId == animeId)
+           .ToListAsync();
         }
     }
 }
