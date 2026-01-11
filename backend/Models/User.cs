@@ -25,7 +25,7 @@ namespace backend.Models
 
         public ICollection<Rating> Ratings { get; set; }
 
-
+        public ICollection<Liking> LikedAnimes { get; set; }
 
     }
 }

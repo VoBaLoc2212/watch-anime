@@ -18,9 +18,11 @@ import { Episode } from "@/models/EpisodeModel";
 import { GetEpisodesApi } from "@/api/EpisodeAPI";
 import { RatingModal } from "@/components/RatingModal";
 import { RatingsList } from "@/components/RatingsList";
-import { Star, Edit } from "lucide-react";
+import { Star, Edit, Heart } from "lucide-react";
 import { GetRatingsForAnimeApi } from "@/api/RatingAPI";
 import { Rating } from "@/models/RatingModel";
+import { AddLikingApi, RemoveLikingApi } from "@/api/LikingAPI";
+import { useToast } from "@/hooks/use-toast";
 
 export default function WatchPage() {
   // Enforce token validity for watch pages only
@@ -40,6 +42,9 @@ export default function WatchPage() {
   const [isRatingModalOpen, setIsRatingModalOpen] = useState(false);
   const [ratings, setRatings] = useState<Rating[]>([]);
   const [isLoadingRatings, setIsLoadingRatings] = useState(false);
+  const [isLiked, setIsLiked] = useState(false);
+  const [isLiking, setIsLiking] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -207,41 +212,99 @@ export default function WatchPage() {
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle>{animeDetails?.animeName}</CardTitle>
-                  {(() => {
-                    // Check if current user has already rated this anime
-                    const userRating = userInfo?.fullName 
-                      ? ratings.find(r => r.userName === userInfo.fullName)
-                      : null;
+                  <div className="flex items-center gap-2">
+                    {/* Add to Favorites Button */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        if (!animeName || isLiking) return;
+                        
+                        setIsLiking(true);
+                        try {
+                          if (isLiked) {
+                            // Remove from favorites
+                            await RemoveLikingApi(animeName);
+                            setIsLiked(false);
+                            toast({
+                              title: "Removed from Favorites",
+                              description: "This anime has been removed from your favorites.",
+                            });
+                          } else {
+                            // Add to favorites
+                            await AddLikingApi(animeName);
+                            setIsLiked(true);
+                            toast({
+                              title: "Added to Favorites",
+                              description: "This anime has been added to your favorites!",
+                            });
+                          }
+                        } catch (error) {
+                          console.error("Failed to update favorites:", error);
+                          toast({
+                            title: "Error",
+                            description: error instanceof Error ? error.message : "Failed to update favorites",
+                            variant: "destructive",
+                          });
+                        } finally {
+                          setIsLiking(false);
+                        }
+                      }}
+                      disabled={isLiking}
+                      title={isLiked ? "Click again to remove from favorites" : ""}
+                      className={`gap-2 transition-all duration-300 ${
+                        isLiked 
+                          ? "bg-red-50 border-red-300 hover:bg-red-100 dark:bg-red-950 dark:border-red-800 cursor-pointer" 
+                          : "hover:scale-105"
+                      }`}
+                    >
+                      <Heart 
+                        className={`w-4 h-4 transition-all duration-500 ${
+                          isLiked 
+                            ? "fill-red-500 text-red-500 animate-[heartBeat_0.6s_ease-in-out]" 
+                            : "hover:scale-110"
+                        }`}
+                      />
+                      {isLiked ? "Favorited" : "Add to Favorites"}
+                    </Button>
 
-                    if (userRating) {
-                      // User has already rated - show their rating with edit button
-                      return (
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => setIsRatingModalOpen(true)}
-                          className="gap-2"
-                        >
-                          <Star className="w-4 h-4 fill-yellow-500 text-yellow-500" />
-                          Your Rating: {userRating.score}★
-                          <Edit className="w-3 h-3 ml-1" />
-                        </Button>
-                      );
-                    } else {
-                      // User hasn't rated yet - show add rating button
-                      return (
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => setIsRatingModalOpen(true)}
-                          className="gap-2"
-                        >
-                          <Star className="w-4 h-4" />
-                          Add Rating
-                        </Button>
-                      );
-                    }
-                  })()}
+                    {/* Rating Button */}
+                    {(() => {
+                      // Check if current user has already rated this anime
+                      const userRating = userInfo?.fullName 
+                        ? ratings.find(r => r.userName === userInfo.fullName)
+                        : null;
+
+                      if (userRating) {
+                        // User has already rated - show their rating with edit button
+                        return (
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => setIsRatingModalOpen(true)}
+                            className="gap-2"
+                          >
+                            <Star className="w-4 h-4 fill-yellow-500 text-yellow-500" />
+                            Your Rating: {userRating.score}★
+                            <Edit className="w-3 h-3 ml-1" />
+                          </Button>
+                        );
+                      } else {
+                        // User hasn't rated yet - show add rating button
+                        return (
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => setIsRatingModalOpen(true)}
+                            className="gap-2"
+                          >
+                            <Star className="w-4 h-4" />
+                            Add Rating
+                          </Button>
+                        );
+                      }
+                    })()}
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">

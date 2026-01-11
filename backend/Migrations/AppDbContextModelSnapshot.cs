@@ -120,6 +120,30 @@ namespace backend.Migrations
                     b.ToTable("Episodes");
                 });
 
+            modelBuilder.Entity("backend.Models.Liking", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("LikedAnimeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("LikedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("LikedById")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LikedAnimeId");
+
+                    b.HasIndex("LikedById");
+
+                    b.ToTable("Likings");
+                });
+
             modelBuilder.Entity("backend.Models.Notification", b =>
                 {
                     b.Property<Guid>("Id")
@@ -260,6 +284,25 @@ namespace backend.Migrations
                     b.Navigation("Anime");
                 });
 
+            modelBuilder.Entity("backend.Models.Liking", b =>
+                {
+                    b.HasOne("backend.Models.Anime", "LikedAnime")
+                        .WithMany("LikedByUsers")
+                        .HasForeignKey("LikedAnimeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("backend.Models.User", "LikedBy")
+                        .WithMany("LikedAnimes")
+                        .HasForeignKey("LikedById")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("LikedAnime");
+
+                    b.Navigation("LikedBy");
+                });
+
             modelBuilder.Entity("backend.Models.Notification", b =>
                 {
                     b.HasOne("backend.Models.User", "User")
@@ -294,12 +337,16 @@ namespace backend.Migrations
                 {
                     b.Navigation("Episodes");
 
+                    b.Navigation("LikedByUsers");
+
                     b.Navigation("Ratings");
                 });
 
             modelBuilder.Entity("backend.Models.User", b =>
                 {
                     b.Navigation("CreatedAnimes");
+
+                    b.Navigation("LikedAnimes");
 
                     b.Navigation("Ratings");
                 });

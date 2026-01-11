@@ -30,6 +30,7 @@ namespace backend.Models
         public Guid CreatedById { get; set; }
 
         public ICollection<Rating> Ratings { get; set; }
+        public ICollection<Liking> LikedByUsers { get; set; }
 
     }
 }

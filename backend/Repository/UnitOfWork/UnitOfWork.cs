@@ -18,6 +18,7 @@ namespace backend.Repository.UnitOfWork
         public IEpisodeRepository Episodes => new EpisodeRepository(_context);
         public IRatingRepository Ratings => new RatingRepository(_context);
         public INotificationRepository Notifications => new NotificationRepository(_context);
+        public ILikingRepository Likings => new LikingRepository(_context);
 
         public async Task<bool> Complete()
         {

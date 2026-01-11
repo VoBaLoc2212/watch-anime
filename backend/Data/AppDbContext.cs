@@ -17,6 +17,7 @@ namespace backend.Data
         public DbSet<Rating> Ratings { get; set; }
 
         public DbSet<Notification> Notifications { get; set; }
+        public DbSet<Liking> Likings { get; set; }
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -56,6 +57,18 @@ namespace backend.Data
                 .HasOne(r => r.Anime)
                 .WithMany(a => a.Ratings)
                 .HasForeignKey(r => r.ReportedAnimeId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.Entity<Liking>()
+                .HasOne(l => l.LikedBy)
+                .WithMany(u => u.LikedAnimes)
+                .HasForeignKey(l => l.LikedById)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.Entity<Liking>()
+                .HasOne(l => l.LikedAnime)
+                .WithMany(a => a.LikedByUsers)
+                .HasForeignKey(l => l.LikedAnimeId)
                 .OnDelete(DeleteBehavior.Cascade);
         }
     }
